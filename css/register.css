@@ -1,0 +1,30 @@
+.password-group{
+    display: flex;
+    align-items: center;
+
+}
+.password-group input{
+    padding: 10px 0;
+    border: 0;
+    outline: 12;
+    color: #555;
+}
+
+.password-group img{
+    width: 25px;
+    cursor: pointer;
+}
+
+.create-btn{
+    color: whitesmoke;
+    background-color: #979d6e;
+    border: 0;
+    border-radius: 4px;
+    width: 100%;
+    padding: 10px;
+    cursor: pointer;
+}
+
+.create-btn:hover{
+    background-color: #7e8364;
+}
