@@ -1,3 +1,7 @@
+<?php
+session_start();
+include 'config.php'; // 包含資料庫連線設定
+?>
 <!DOCTYPE html>
 <html lang="en">
 <head>

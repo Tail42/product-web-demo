@@ -1,6 +1,7 @@
 <?php session_start(); ?>
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -8,6 +9,7 @@
     <link rel="stylesheet" href="css/style.css">
     <link rel="stylesheet" href="css/register.css">
 </head>
+
 <body>
     <header>
         <div class="main-banner">
@@ -26,8 +28,8 @@
                     <input type="text" id="name" name="name" placeholder="Enter your name" required>
                 </div>
                 <div class="form-group">
-                    <label for="email">Email</label>
-                    <input type="email" id="email" name="email" placeholder="Enter your email" required>
+                    <label for="account">Email</label>
+                    <input type="email" id="account" name="account" placeholder="Enter your email" required>
                 </div>
                 <div class="form-group password-group">
                     <label for="password">Password</label>
@@ -36,27 +38,37 @@
                 </div>
                 <div class="form-group">
                     <label for="confirm-password">Confirm Password</label>
-                    <input type="password" id="confirm-password" name="confirm-password" placeholder="Confirm your password" required>
+                    <input type="password" id="confirm-password" name="confirm-password"
+                        placeholder="Confirm your password" required>
                 </div>
                 <div class="form-group">
                     <label for="user-photo">Profile Photo</label>
                     <input type="file" id="user-photo" name="user-photo" accept="image/*">
                 </div>
                 <div class="form-group">
-                    <label for="user-photo">Address</label>
+                    <label for="address">Address</label>
                     <input type="text" id="address" name="address" placeholder="Enter your address" required>
                 </div>
                 <div class="form-group">
-                    <label for="user-photo">Phone number</label>
+                    <label for="phone">Phone number</label>
                     <input type="text" id="phone" name="phone" placeholder="Enter your phone number" required>
                 </div>
                 <button type="submit" class="create-btn">Create Account</button>
             </form>
         </section>
+        <?php if (isset($_SESSION['register_error'])) { ?>
+            <p class="error"><?php echo $_SESSION['register_error'];
+            unset($_SESSION['register_error']); ?></p>
+        <?php } ?>
+        <?php if (isset($_SESSION['register_success'])) { ?>
+            <p class="success"><?php echo $_SESSION['register_success'];
+            unset($_SESSION['register_success']); ?></p>
+        <?php } ?>
     </main>
     <footer>
         <p>© 2025 E-Shop System</p>
     </footer>
     <script src="js/script.js"></script>
 </body>
+
 </html>
