@@ -34,8 +34,8 @@
                 <?php if (isset($_SESSION['login_error'])) { ?>
                     <p class="error"><?php echo $_SESSION['login_error']; unset($_SESSION['login_error']); ?></p>
                 <?php } ?>
+                <p>Don't have an account? <a href="register.php">Register here</a>.</p>
             </form>
-            <p>Don't have an account? <a href="register.php">Register here</a>.</p>
         </section>
     </main>
     <footer>

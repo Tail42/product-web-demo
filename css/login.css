@@ -1,31 +1,44 @@
 .login-form {
-    max-width: 400px;
-    margin: 40px auto;
-    padding: 20px;
-    background-color: white;
-    border: 1px solid #ddd;
+    max-width: 450px;
+    margin: 50px auto;
+    padding: 30px;
+    background-color: #B5A8A0;
+    border: 1px solid #BB9A88;
     border-radius: 8px;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
 }
 
 .login-form h2 {
     text-align: center;
-    margin-bottom: 20px;
+    margin-bottom: 25px;
+    color: #3A3A3A;
+    font-size: 1.8em;
 }
 
 .form-group {
-    margin-bottom: 15px;
+    margin-bottom: 20px;
 }
 
 .form-group label {
     display: block;
-    margin-bottom: 5px;
+    margin-bottom: 8px;
+    color: #3A3A3A;
+    font-weight: 600;
 }
 
 .form-group input {
     width: 100%;
-    padding: 8px;
-    border: 1px solid #ddd;
-    border-radius: 4px;
+    padding: 12px;
+    border: 1px solid #BB9A88;
+    border-radius: 6px;
+    background-color: #CAC6BD;
+    font-size: 1em;
+    color: #3A3A3A;
+}
+
+.form-group input:focus {
+    outline: none;
+    border-color: #979D6E;
 }
 
 .password-group {
@@ -34,30 +47,59 @@
 
 .toggle-password {
     position: absolute;
-    right: 10px;
-    top: 38px;
+    right: 15px;
+    top: 42px;
     background: none;
     border: none;
-    color: #007bff;
+    color: #979D6E;
     cursor: pointer;
+    font-size: 0.9em;
+    font-weight: 600;
 }
 
 .submit-btn {
     width: 100%;
-    padding: 10px;
-    background-color: #007bff;
+    padding: 12px;
+    background-color: #979D6E;
     color: white;
     border: none;
-    border-radius: 4px;
+    border-radius: 6px;
     cursor: pointer;
+    font-size: 1.1em;
+    font-weight: 600;
 }
 
 .submit-btn:hover {
-    background-color: #0056b3;
+    background-color: #7e8364;
 }
 
 .error {
-    color: red;
+    color: #BB9A88;
     text-align: center;
-    margin-top: 10px;
+    margin-top: 15px;
+    font-size: 0.9em;
+}
+
+.login-form p {
+    text-align: center;
+    margin-top: 20px;
+    font-size: 0.95em;
+}
+
+.login-form p a {
+    color: #979D6E;
+    text-decoration: none;
+    font-weight: 600;
+}
+
+.login-form p a:hover {
+    color: #7e8364;
+    text-decoration: underline;
+}
+
+@media (max-width: 480px) {
+    .login-form {
+        margin: 20px;
+        padding: 20px;
+    }
 }
