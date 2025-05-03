@@ -50,8 +50,9 @@ mysqli_close($conn);
     <main>
         <section class="product-display" style="text-align: center; padding: 50px;">
             <h2>User Profile</h2>
-            <p><strong>Name:</strong> <?php echo htmlspecialchars($user['name'] ?? 'N/A'); ?></p>
-            <p><strong>Email:</strong> <?php echo htmlspecialchars($user['email'] ?? 'N/A'); ?></p>
+            <p><strong>User Name:</strong> <?php echo htmlspecialchars($user['user_name'] ?? 'N/A'); ?></p>
+            <p><strong>Email:</strong> <?php echo htmlspecialchars($user['account'] ?? 'N/A'); ?></p>
+            <p><strong>Full Name:</strong> <?php echo htmlspecialchars($user['fullname'] ?? 'N/A'); ?></p>
             <p><strong>Address:</strong> <?php echo htmlspecialchars($user['address'] ?? 'N/A'); ?></p>
             <p><strong>Phone:</strong> <?php echo htmlspecialchars($user['phone'] ?? 'N/A'); ?></p>
             <img src="<?php echo htmlspecialchars($user['user_photo'] ?? 'images/default_user.png'); ?>"

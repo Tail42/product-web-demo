@@ -28,11 +28,16 @@
                 <div class="form-group password-group">
                     <label for="password">Password</label>
                     <input type="password" id="password" name="password" required>
-                    <button type="button" class="toggle-password">Show</button>
+                    <button type="button" class="toggle-password">
+                        <img src="images/eye-close.png" alt="Toggle Password" class="password-toggle-img">
+                    </button>
                 </div>
                 <button type="submit" class="submit-btn">Login</button>
                 <?php if (isset($_SESSION['login_error'])) { ?>
-                    <p class="error"><?php echo $_SESSION['login_error']; unset($_SESSION['login_error']); ?></p>
+                    <script>
+                        alert('<?php echo addslashes($_SESSION['login_error']); ?>');
+                    </script>
+                    <?php unset($_SESSION['login_error']); ?>
                 <?php } ?>
                 <p>Don't have an account? <a href="register.php">Register here</a>.</p>
             </form>

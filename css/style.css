@@ -89,6 +89,25 @@ body {
     border: 2px solid #BB9A88;
 }
 
+.toggle-password {
+    padding: 0;
+    border: none;
+    background: none;
+    cursor: pointer;
+    margin-left: 10px;
+    vertical-align: middle;
+}
+
+.password-toggle-img {
+    width: 24px;
+    height: 24px;
+    transition: opacity 0.3s;
+}
+
+.password-toggle-img:hover {
+    opacity: 0.7;
+}
+
 .category-selection {
     padding: 30px;
     background-color: #CAC6BD;

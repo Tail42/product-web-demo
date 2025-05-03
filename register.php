@@ -34,12 +34,16 @@
                 <div class="form-group password-group">
                     <label for="password">Password</label>
                     <input type="password" id="password" name="password" placeholder="Enter your password" required>
-                    <button type="button" class="toggle-password">Show</button>
+                    <button type="button" class="toggle-password">
+                        <img src="images/eye-close.png" alt="Toggle Password" class="password-toggle-img">
+                    </button>
                 </div>
-                <div class="form-group">
+                <div class="form-group password-group">
                     <label for="confirm-password">Confirm Password</label>
-                    <input type="password" id="confirm-password" name="confirm-password"
-                        placeholder="Confirm your password" required>
+                    <input type="password" id="confirm-password" name="confirm-password" placeholder="Confirm your password" required>
+                    <button type="button" class="toggle-password">
+                        <img src="images/eye-close.png" alt="Toggle Password" class="password-toggle-img">
+                    </button>
                 </div>
                 <div class="form-group">
                     <label for="user-photo">Profile Photo</label>

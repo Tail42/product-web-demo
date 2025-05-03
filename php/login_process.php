@@ -19,13 +19,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $result = mysqli_stmt_get_result($stmt);
     $user = mysqli_fetch_assoc($result);
 
-    if ($user && password_verify($password, $user['hash_password'])) {
-        $_SESSION['user_id'] = $user['user_id'];
-        $_SESSION['name'] = $user['user_name']; // 改為 user_name
-        $_SESSION['user_photo'] = $user['user_picture'] ?: 'images/default_user.png'; // 改為 user_picture
-        header("Location: ../index.php");
+    if ($user) {
+        if (password_verify($password, $user['hash_password'])) {
+            $_SESSION['user_id'] = $user['user_id'];
+            $_SESSION['name'] = $user['user_name'];
+            $_SESSION['user_photo'] = $user['user_picture'] ?: 'images/default_user.png';
+            header("Location: ../index.php");
+        } else {
+            $_SESSION['login_error'] = 'Incorrect password.';
+            header("Location: ../login.php");
+        }
     } else {
-        $_SESSION['login_error'] = 'Invalid account or password.';
+        $_SESSION['login_error'] = 'Account is not registered.';
         header("Location: ../login.php");
     }
 
