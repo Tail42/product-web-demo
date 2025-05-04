@@ -26,31 +26,6 @@ $active_section = isset($_GET['section']) ? $_GET['section'] : 'my-account';
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (isset($_POST['action'])) {
         switch ($_POST['action']) {
-            case 'update_account':
-                $new_name = trim($_POST['new_name'] ?? '');
-                $new_fullname = trim($_POST['new_fullname'] ?? '');
-                $new_address = trim($_POST['new_address'] ?? '');
-                $new_phone = trim($_POST['new_phone'] ?? '');
-
-                if (empty($new_name) || empty($new_fullname) || empty($new_address) || empty($new_phone)) {
-                    $error_message = 'All fields are required.';
-                } else {
-                    $query = "UPDATE users SET user_name = ?, fullname = ?, address = ?, phone = ? WHERE user_id = ?";
-                    $stmt = mysqli_prepare($conn, $query);
-                    mysqli_stmt_bind_param($stmt, "ssssi", $new_name, $new_fullname, $new_address, $new_phone, $user_id);
-                    if (mysqli_stmt_execute($stmt)) {
-                        $success_message = 'Account updated successfully!';
-                        $user['user_name'] = $new_name;
-                        $user['fullname'] = $new_fullname;
-                        $user['address'] = $new_address;
-                        $user['phone'] = $new_phone;
-                    } else {
-                        $error_message = 'Update failed: ' . mysqli_error($conn);
-                    }
-                    mysqli_stmt_close($stmt);
-                }
-                break;
-
             case 'change_password':
                 $current_password = trim($_POST['current_password'] ?? '');
                 $new_password = trim($_POST['new_password'] ?? '');
@@ -197,27 +172,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     <p><strong>Phone:</strong> <?php echo htmlspecialchars($user['phone'] ?? 'N/A'); ?></p>
                 </div>
                 <div class="form-section">
-                    <h3>Update Account</h3>
-                    <form method="POST" action="">
-                        <input type="hidden" name="action" value="update_account">
-                        <div class="form-group">
-                            <label for="new_name">User Name</label>
-                            <input type="text" id="new_name" name="new_name" value="<?php echo htmlspecialchars($user['user_name'] ?? ''); ?>" placeholder="New User Name" required>
-                        </div>
-                        <div class="form-group">
-                            <label for="new_fullname">Full Name</label>
-                            <input type="text" id="new_fullname" name="new_fullname" value="<?php echo htmlspecialchars($user['fullname'] ?? ''); ?>" placeholder="New Full Name" required>
-                        </div>
-                        <div class="form-group">
-                            <label for="new_address">Address</label>
-                            <input type="text" id="new_address" name="new_address" value="<?php echo htmlspecialchars($user['user_name'] ?? ''); ?>" placeholder="New Address" required>
-                        </div>
-                        <div class="form-group">
-                            <label for="new_phone">Phone</label>
-                            <input type="tel" id="new_phone" name="new_phone" value="<?php echo htmlspecialchars($user['phone'] ?? ''); ?>" placeholder="New Phone" required>
-                        </div>
-                        <button type="submit" class="create-btn">Update Account</button>
-                    </form>
+                    <a href="edit_user_info.php" class="create-btn">Edit Profile</a>
                 </div>
 
             <?php elseif ($active_section === 'change-password'): ?>
