@@ -1,9 +1,0 @@
-接下來我要在 user.php 頁面加工以下功能:
-1. My account: 可以觀看自己的基本資訊 (user name, email 等)，並且可以修改
-2. Change password: 可以透過這個連結更改密碼 (需要輸入 confirm password)
-3. My product: 可以透過這個地方使用 add product 功能在資料庫 "products" 新增資料
-    * product_id (varchar or int), product_name (varchar), category (varchar), seller_id (varchar), 
-        description (text), prodict_image(varchar), in_stock(int), sold(int), price(int),  
-        create_at (timestamp), update_at (timestamp)
-4. Log out: 登出目前使用者
-5. Delete Account: 從資料庫刪除目前使用者帳號 (需要使用者再次輸入帳號才能確認刪除)
