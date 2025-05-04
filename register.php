@@ -65,10 +65,16 @@ session_start();
             </form>
         </section>
         <?php if (isset($_SESSION['register_error'])): ?>
-            <p class="error"><?php echo htmlspecialchars($_SESSION['register_error']); unset($_SESSION['register_error']); ?></p>
+            <script>
+                alert('<?php echo addslashes($_SESSION['register_error']); ?>');
+            </script>
+            <?php unset($_SESSION['register_error']); ?>
         <?php endif; ?>
         <?php if (isset($_SESSION['register_success'])): ?>
-            <p class="success"><?php echo htmlspecialchars($_SESSION['register_success']); unset($_SESSION['register_success']); ?></p>
+            <script>
+                alert('<?php echo addslashes($_SESSION['register_error']); ?>');
+            </script>
+            <?php unset($_SESSION['register_error']); ?>
         <?php endif; ?>
     </main>
     <footer>

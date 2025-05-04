@@ -70,7 +70,7 @@ if (isset($_FILES['user-photo']) && $_FILES['user-photo']['error'] === UPLOAD_ER
         exit;
     }
 
-    $max_size = 10 * 1024 * 1024; // 7MB
+    $max_size = 5 * 1024 * 1024; // 5MB
     if ($file_size > $max_size) {
         $_SESSION['register_error'] = 'File size exceeds 5MB limit.';
         header("Location: ../register.php");
@@ -81,7 +81,8 @@ if (isset($_FILES['user-photo']) && $_FILES['user-photo']['error'] === UPLOAD_ER
     $destination = $upload_dir . $new_file_name;
 
     if (move_uploaded_file($file_tmp, $destination)) {
-        $user_picture = $destination;
+        // $user_picture = $destination;
+        $user_picture = 'images/' . $new_file_name; // 儲存相對路徑
     } else {
         $_SESSION['register_error'] = 'Failed to upload file. Error: ' . error_get_last()['message'];
         header("Location: ../register.php");

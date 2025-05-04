@@ -1,6 +1,20 @@
 <?php
 session_start();
 include 'config.php'; // 包含資料庫連線設定
+
+$user_picture = 'images/default_user.png';
+if (isset($_SESSION['user_id'])) {
+    $user_id = $_SESSION['user_id'];
+    $query = "SELECT user_picture FROM users WHERE user_id = ? LIMIT 1";
+    $stmt = mysqli_prepare($conn, $query);
+    mysqli_stmt_bind_param($stmt, "i", $user_id);
+    mysqli_stmt_execute($stmt);
+    $result = mysqli_stmt_get_result($stmt);
+    if ($row = mysqli_fetch_assoc($result)) {
+        $user_picture = htmlspecialchars($row['user_picture'] ?? 'images/default_user.png');
+    }
+    mysqli_stmt_close($stmt);
+}
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -22,7 +36,7 @@ include 'config.php'; // 包含資料庫連線設定
             </div>
             <div class="user-function">
                 <?php if (isset($_SESSION['user_id'])) { ?>
-                    <a href="user.php"><img src="<?php echo isset($_SESSION['user_picture']) ? $_SESSION['user_picture'] : 'images/default_user.png'; ?>" alt="Profile" class="user-pic"></a>
+                    <a href="user.php"><img src="<?php echo $user_picture; ?>" alt="Profile" class="user-pic"></a>
                     <a href="cart.php">Cart</a>
                     <a href="php/logout.php">Logout</a>
                 <?php } else { ?>

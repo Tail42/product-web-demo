@@ -40,7 +40,7 @@ mysqli_close($conn);
             </div>
             <div class="user-function">
                 <a href="user.php"><img
-                        src="<?php echo htmlspecialchars($user['user_photo'] ?? 'images/default_user.png'); ?>"
+                        src="<?php echo htmlspecialchars($user['user_picture'] ?? 'images/default_user.png'); ?>"
                         alt="Profile" class="user-pic"></a>
                 <a href="cart.php">Cart</a>
                 <a href="php/logout.php">Logout</a>
@@ -55,7 +55,7 @@ mysqli_close($conn);
             <p><strong>Full Name:</strong> <?php echo htmlspecialchars($user['fullname'] ?? 'N/A'); ?></p>
             <p><strong>Address:</strong> <?php echo htmlspecialchars($user['address'] ?? 'N/A'); ?></p>
             <p><strong>Phone:</strong> <?php echo htmlspecialchars($user['phone'] ?? 'N/A'); ?></p>
-            <img src="<?php echo htmlspecialchars($user['user_photo'] ?? 'images/default_user.png'); ?>"
+            <img src="<?php echo htmlspecialchars($user['user_picture'] ?? 'images/default_user.png'); ?>"
                 alt="Profile Photo" style="max-width: 200px; border-radius: 50%; margin-top: 20px;">
             <p><a href="index.php">Back to Home</a></p>
         </section>
