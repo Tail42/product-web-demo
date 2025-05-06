@@ -70,7 +70,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $result = mysqli_stmt_get_result($stmt);
                     $row = mysqli_fetch_assoc($result);
                     if ($row['count'] > 0) {
-                        // Delete the product
+                        // Delete associated images
+                        $query = "SELECT image_path FROM product_images WHERE product_id = ?";
+                        $stmt = mysqli_prepare($conn, $query);
+                        if ($stmt) {
+                            mysqli_stmt_bind_param($stmt, "i", $product_id);
+                            mysqli_stmt_execute($stmt);
+                            $result = mysqli_stmt_get_result($stmt);
+                            while ($image = mysqli_fetch_assoc($result)) {
+                                if ($image['image_path'] !== 'images/product/default_product_img.png') {
+                                    @unlink(__DIR__ . '/' . $image['image_path']);
+                                }
+                            }
+                            mysqli_stmt_close($stmt);
+                        }
+
+                        // Delete the product (ON DELETE CASCADE handles product_images)
                         $query = "DELETE FROM products WHERE product_id = ? AND seller_id = ?";
                         $stmt = mysqli_prepare($conn, $query);
                         mysqli_stmt_bind_param($stmt, "ii", $product_id, $user_id);
@@ -116,16 +131,34 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 }
 
-// Query user's products (only for my-product section)
+// Query user's products and images (only for my-product section)
 $products = [];
 if ($active_section === 'my-product') {
-    $query = "SELECT product_id, product_name, category, description, product_image, in_stock, sold, price FROM products WHERE seller_id = ?";
+    $query = "SELECT product_id, product_name, category, description, in_stock, sold, price FROM products WHERE seller_id = ?";
     $stmt = mysqli_prepare($conn, $query);
     mysqli_stmt_bind_param($stmt, "i", $user_id);
     mysqli_stmt_execute($stmt);
     $result = mysqli_stmt_get_result($stmt);
     while ($row = mysqli_fetch_assoc($result)) {
-        $products[] = $row;
+        $product = $row;
+        // Fetch images for this product
+        $product['images'] = ['images/product/default_product_img.png']; // Default image
+        $query_images = "SELECT image_path FROM product_images WHERE product_id = ?";
+        $stmt_images = mysqli_prepare($conn, $query_images);
+        if ($stmt_images) {
+            mysqli_stmt_bind_param($stmt_images, "i", $row['product_id']);
+            mysqli_stmt_execute($stmt_images);
+            $result_images = mysqli_stmt_get_result($stmt_images);
+            $images = [];
+            while ($image_row = mysqli_fetch_assoc($result_images)) {
+                $images[] = $image_row['image_path'];
+            }
+            if (!empty($images)) {
+                $product['images'] = $images; // Override default if images exist
+            }
+            mysqli_stmt_close($stmt_images);
+        }
+        $products[] = $product;
     }
     mysqli_stmt_close($stmt);
 }
@@ -219,7 +252,32 @@ if ($active_section === 'my-product') {
                         <div class="product-grid">
                             <?php foreach ($products as $product): ?>
                                 <div class="product-card">
-                                    <img src="<?php echo htmlspecialchars($product['product_image'] ?? 'images/product/default_product_img.png'); ?>" alt="Product Image">
+                                    <div class="image-carousel">
+                                        <button class="carousel-prev" data-product-id="<?php echo $product['product_id']; ?>"><</button>
+                                        <img src="<?php echo htmlspecialchars($product['images'][0]); ?>" alt="Product Image" class="carousel-image" data-product-id="<?php echo $product['product_id']; ?>">
+                                        <button class="carousel-next" data-product-id="<?php echo $product['product_id']; ?>">></button>
+                                        <script>
+                                            const images<?php echo $product['product_id']; ?> = <?php echo json_encode($product['images']); ?>;
+                                            let currentIndex<?php echo $product['product_id']; ?> = 0;
+                                            const imgElement<?php echo $product['product_id']; ?> = document.querySelector('.carousel-image[data-product-id="<?php echo $product['product_id']; ?>"]');
+                                            const prevButton<?php echo $product['product_id']; ?> = document.querySelector('.carousel-prev[data-product-id="<?php echo $product['product_id']; ?>"]');
+                                            const nextButton<?php echo $product['product_id']; ?> = document.querySelector('.carousel-next[data-product-id="<?php echo $product['product_id']; ?>"]');
+
+                                            function updateImage<?php echo $product['product_id']; ?>() {
+                                                imgElement<?php echo $product['product_id']; ?>.src = images<?php echo $product['product_id']; ?>[currentIndex<?php echo $product['product_id']; ?>];
+                                            }
+
+                                            prevButton<?php echo $product['product_id']; ?>.addEventListener('click', () => {
+                                                currentIndex<?php echo $product['product_id']; ?> = (currentIndex<?php echo $product['product_id']; ?> - 1 + images<?php echo $product['product_id']; ?>.length) % images<?php echo $product['product_id']; ?>.length;
+                                                updateImage<?php echo $product['product_id']; ?>();
+                                            });
+
+                                            nextButton<?php echo $product['product_id']; ?>.addEventListener('click', () => {
+                                                currentIndex<?php echo $product['product_id']; ?> = (currentIndex<?php echo $product['product_id']; ?> + 1) % images<?php echo $product['product_id']; ?>.length;
+                                                updateImage<?php echo $product['product_id']; ?>();
+                                            });
+                                        </script>
+                                    </div>
                                     <h3><?php echo htmlspecialchars($product['product_name'] ?? 'No Name'); ?></h3>
                                     <p><strong>Category:</strong> <?php echo htmlspecialchars($product['category'] ?? 'N/A'); ?></p>
                                     <p><strong>Description:</strong> <?php echo htmlspecialchars($product['description'] ?? 'N/A'); ?></p>

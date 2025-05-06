@@ -37,46 +37,81 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
     if (empty($product_name) || empty($category) || empty($description) || empty($in_stock) || empty($price)) {
         $error_message = 'All fields are required (except sold).';
     } else {
-        // Handle image upload
-        $product_image = 'images/product/default_product_img.png';
-        if (isset($_FILES['product_image']) && $_FILES['product_image']['error'] === UPLOAD_ERR_OK) {
-            $upload_dir = __DIR__ . '/images/product/';
-            if (!is_dir($upload_dir)) {
-                mkdir($upload_dir, 0777, true);
-            }
-            $file_tmp = $_FILES['product_image']['tmp_name'];
-            $file_name = basename($_FILES['product_image']['name']);
-            $file_type = mime_content_type($file_tmp);
-            $file_size = $_FILES['product_image']['size'];
+        // Handle multiple image uploads
+        $image_paths = [];
+        $upload_dir = __DIR__ . "/images/product/$user_id/";
+        if (!is_dir($upload_dir)) {
+            mkdir($upload_dir, 0777, true);
+        }
 
+        if (isset($_FILES['product_images']) && !empty($_FILES['product_images']['name'][0])) {
             $allowed_types = ['image/jpeg', 'image/png', 'image/gif'];
-            if (!in_array($file_type, $allowed_types)) {
-                $error_message = 'Invalid file type. Only JPG, PNG, and GIF are allowed.';
-            } elseif ($file_size > 5 * 1024 * 1024) {
-                $error_message = 'File size exceeds 5MB limit.';
-            } else {
-                $new_file_name = 'product_' . uniqid() . '.' . pathinfo($file_name, PATHINFO_EXTENSION);
-                $destination = $upload_dir . $new_file_name;
+            foreach ($_FILES['product_images']['name'] as $key => $name) {
+                if ($_FILES['product_images']['error'][$key] === UPLOAD_ERR_OK) {
+                    $file_tmp = $_FILES['product_images']['tmp_name'][$key];
+                    $file_name = basename($name);
+                    $file_type = mime_content_type($file_tmp);
+                    $file_size = $_FILES['product_images']['size'][$key];
 
-                if (move_uploaded_file($file_tmp, $destination)) {
-                    $product_image = 'images/product/' . $new_file_name;
-                } else {
-                    $error_message = 'Failed to upload file.';
+                    if (!in_array($file_type, $allowed_types)) {
+                        $error_message = 'Invalid file type for ' . $file_name . '. Only JPG, PNG, and GIF are allowed.';
+                        break;
+                    } elseif ($file_size > 5 * 1024 * 1024) {
+                        $error_message = 'File size for ' . $file_name . ' exceeds 5MB limit.';
+                        break;
+                    } else {
+                        $new_file_name = 'product_' . uniqid() . '.' . pathinfo($file_name, PATHINFO_EXTENSION);
+                        $destination = $upload_dir . $new_file_name;
+
+                        if (move_uploaded_file($file_tmp, $destination)) {
+                            $image_paths[] = "images/product/$user_id/" . $new_file_name;
+                        } else {
+                            $error_message = 'Failed to upload file ' . $file_name . '.';
+                            break;
+                        }
+                    }
                 }
             }
+        } else {
+            $image_paths[] = "images/product/default_product_img.png";
         }
 
         // Insert product
         if (empty($error_message)) {
-            $query = "INSERT INTO products (product_name, category, seller_id, description, product_image, in_stock, sold, price, create_at, update_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+            $query = "INSERT INTO products (product_name, category, seller_id, description, in_stock, sold, price, create_at, update_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)";
             $stmt = mysqli_prepare($conn, $query);
-            mysqli_stmt_bind_param($stmt, "ssissiiiss", $product_name, $category, $seller_id, $description, $product_image, $in_stock, $sold, $price, $create_at, $update_at);
-            if (mysqli_stmt_execute($stmt)) {
-                $success_message = 'Product added successfully!';
+            if ($stmt) {
+                mysqli_stmt_bind_param($stmt, "ssissiiss", $product_name, $category, $seller_id, $description, $in_stock, $sold, $price, $create_at, $update_at);
+                if (mysqli_stmt_execute($stmt)) {
+                    $product_id = mysqli_insert_id($conn);
+                    mysqli_stmt_close($stmt);
+
+                    // Insert image paths
+                    $query = "INSERT INTO product_images (product_id, image_path) VALUES (?, ?)";
+                    $stmt = mysqli_prepare($conn, $query);
+                    if ($stmt) {
+                        foreach ($image_paths as $image_path) {
+                            mysqli_stmt_bind_param($stmt, "is", $product_id, $image_path);
+                            if (!mysqli_stmt_execute($stmt)) {
+                                $error_message = 'Failed to insert image path: ' . mysqli_error($conn);
+                                break;
+                            }
+                        }
+                        mysqli_stmt_close($stmt);
+                    } else {
+                        $error_message = 'Failed to prepare image insertion: ' . mysqli_error($conn);
+                    }
+
+                    if (empty($error_message)) {
+                        $success_message = 'Product added successfully!';
+                    }
+                } else {
+                    $error_message = 'Product addition failed: ' . mysqli_error($conn);
+                    mysqli_stmt_close($stmt);
+                }
             } else {
-                $error_message = 'Product addition failed: ' . mysqli_error($conn);
+                $error_message = 'Failed to prepare product insertion: ' . mysqli_error($conn);
             }
-            mysqli_stmt_close($stmt);
         }
     }
 }
@@ -145,8 +180,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
                         <input type="text" id="description" name="description" placeholder="Description" required>
                     </div>
                     <div class="form-group">
-                        <label for="product_image">Product Image</label>
-                        <input type="file" id="product_image" name="product_image" accept="image/jpeg,image/png,image/gif">
+                        <label for="product_images">Product Images (Select multiple)</label>
+                        <input type="file" id="product_images" name="product_images[]" accept="image/jpeg,image/png,image/gif" multiple>
                     </div>
                     <div class="form-group">
                         <label for="in_stock">In Stock</label>

@@ -8,7 +8,7 @@ if (!isset($_SESSION['user_id'])) {
 }
 
 $user_id = $_SESSION['user_id'];
-$product_id = isset($_GET['product_id']) ? trim($_GET['product_id']) : '';
+$product_id = isset($_GET['product_id']) ? (int)($_GET['product_id']) : 0;
 
 // Query user info for header
 $query = "SELECT user_name, account, fullname, address, phone, user_picture FROM users WHERE user_id = ? LIMIT 1";
@@ -21,10 +21,10 @@ mysqli_stmt_close($stmt);
 
 // Query product info
 $product = null;
-if (!empty($product_id)) {
-    $query = "SELECT product_id, product_name, category, description, product_image, in_stock, sold, price FROM products WHERE product_id = ? AND seller_id = ?";
+if ($product_id > 0) {
+    $query = "SELECT product_id, product_name, category, description, in_stock, sold, price FROM products WHERE product_id = ? AND seller_id = ?";
     $stmt = mysqli_prepare($conn, $query);
-    mysqli_stmt_bind_param($stmt, "si", $product_id, $user_id);
+    mysqli_stmt_bind_param($stmt, "ii", $product_id, $user_id);
     mysqli_stmt_execute($stmt);
     $result = mysqli_stmt_get_result($stmt);
     $product = mysqli_fetch_assoc($result);
@@ -34,6 +34,20 @@ if (!empty($product_id)) {
 if (!$product) {
     header("Location: user.php?section=my-product");
     exit;
+}
+
+// Query existing images
+$images = [];
+$query = "SELECT image_id, image_path FROM product_images WHERE product_id = ?";
+$stmt = mysqli_prepare($conn, $query);
+if ($stmt) {
+    mysqli_stmt_bind_param($stmt, "i", $product_id);
+    mysqli_stmt_execute($stmt);
+    $result = mysqli_stmt_get_result($stmt);
+    while ($row = mysqli_fetch_assoc($result)) {
+        $images[] = $row;
+    }
+    mysqli_stmt_close($stmt);
 }
 
 // Handle form submission
@@ -48,58 +62,109 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
     $sold = (int)($_POST['sold'] ?? 0);
     $price = (float)($_POST['price'] ?? 0);
     $update_at = date('Y-m-d H:i:s');
+    $delete_images = isset($_POST['delete_images']) ? $_POST['delete_images'] : [];
 
     // Validate required fields
     if (empty($product_name) || empty($category) || empty($description) || empty($in_stock) || empty($price)) {
         $error_message = 'All fields are required (except sold).';
     } else {
-        // Handle image upload
-        $product_image = $product['product_image'];
-        if (isset($_FILES['product_image']) && $_FILES['product_image']['error'] === UPLOAD_ERR_OK) {
-            $upload_dir = __DIR__ . '/images/';
-            if (!is_dir($upload_dir)) {
-                mkdir($upload_dir, 0777, true);
+        // Handle image deletions
+        foreach ($delete_images as $image_id) {
+            $query = "SELECT image_path FROM product_images WHERE image_id = ? AND product_id = ?";
+            $stmt = mysqli_prepare($conn, $query);
+            mysqli_stmt_bind_param($stmt, "ii", $image_id, $product_id);
+            mysqli_stmt_execute($stmt);
+            $result = mysqli_stmt_get_result($stmt);
+            $image = mysqli_fetch_assoc($result);
+            if ($image && $image['image_path'] !== 'images/product/default_product_img.png') {
+                @unlink(__DIR__ . '/' . $image['image_path']);
             }
-            $file_tmp = $_FILES['product_image']['tmp_name'];
-            $file_name = basename($_FILES['product_image']['name']);
-            $file_type = mime_content_type($file_tmp);
-            $file_size = $_FILES['product_image']['size'];
+            mysqli_stmt_close($stmt);
 
+            $query = "DELETE FROM product_images WHERE image_id = ? AND product_id = ?";
+            $stmt = mysqli_prepare($conn, $query);
+            mysqli_stmt_bind_param($stmt, "ii", $image_id, $product_id);
+            mysqli_stmt_execute($stmt);
+            mysqli_stmt_close($stmt);
+        }
+
+        // Handle new image uploads
+        $image_paths = [];
+        $upload_dir = __DIR__ . "/images/product/$user_id/";
+        if (!is_dir($upload_dir)) {
+            mkdir($upload_dir, 0777, true);
+        }
+
+        if (isset($_FILES['product_images']) && !empty($_FILES['product_images']['name'][0])) {
             $allowed_types = ['image/jpeg', 'image/png', 'image/gif'];
-            if (!in_array($file_type, $allowed_types)) {
-                $error_message = 'Invalid file type. Only JPG, PNG, and GIF are allowed.';
-            } elseif ($file_size > 5 * 1024 * 1024) {
-                $error_message = 'File size exceeds 5MB limit.';
-            } else {
-                $new_file_name = 'product_' . uniqid() . '.' . pathinfo($file_name, PATHINFO_EXTENSION);
-                $destination = $upload_dir . $new_file_name;
+            foreach ($_FILES['product_images']['name'] as $key => $name) {
+                if ($_FILES['product_images']['error'][$key] === UPLOAD_ERR_OK) {
+                    $file_tmp = $_FILES['product_images']['tmp_name'][$key];
+                    $file_name = basename($name);
+                    $file_type = mime_content_type($file_tmp);
+                    $file_size = $_FILES['product_images']['size'][$key];
 
-                if (move_uploaded_file($file_tmp, $destination)) {
-                    $product_image = 'images/' . $new_file_name;
-                    // Optionally delete old image if not default
-                    if ($product['product_image'] !== 'images/default_product.png') {
-                        @unlink(__DIR__ . '/' . $product['product_image']);
+                    if (!in_array($file_type, $allowed_types)) {
+                        $error_message = 'Invalid file type for ' . $file_name . '. Only JPG, PNG, and GIF are allowed.';
+                        break;
+                    } elseif ($file_size > 5 * 1024 * 1024) {
+                        $error_message = 'File size for ' . $file_name . ' exceeds 5MB limit.';
+                        break;
+                    } else {
+                        $new_file_name = 'product_' . uniqid() . '.' . pathinfo($file_name, PATHINFO_EXTENSION);
+                        $destination = $upload_dir . $new_file_name;
+
+                        if (move_uploaded_file($file_tmp, $destination)) {
+                            $image_paths[] = "images/product/$user_id/" . $new_file_name;
+                        } else {
+                            $error_message = 'Failed to upload file ' . $file_name . '.';
+                            break;
+                        }
                     }
-                } else {
-                    $error_message = 'Failed to upload file.';
                 }
             }
         }
 
         // Update product
         if (empty($error_message)) {
-            $query = "UPDATE products SET product_name = ?, category = ?, description = ?, product_image = ?, in_stock = ?, sold = ?, price = ?, update_at = ? WHERE product_id = ? AND seller_id = ?";
+            $query = "UPDATE products SET product_name = ?, category = ?, description = ?, in_stock = ?, sold = ?, price = ?, update_at = ? WHERE product_id = ? AND seller_id = ?";
             $stmt = mysqli_prepare($conn, $query);
-            mysqli_stmt_bind_param($stmt, "ssssiiissi", $product_name, $category, $description, $product_image, $in_stock, $sold, $price, $update_at, $product_id, $user_id);
+            mysqli_stmt_bind_param($stmt, "sssiissi", $product_name, $category, $description, $in_stock, $sold, $price, $update_at, $product_id, $user_id);
             if (mysqli_stmt_execute($stmt)) {
+                // Insert new images
+                foreach ($image_paths as $image_path) {
+                    $query = "INSERT INTO product_images (product_id, image_path) VALUES (?, ?)";
+                    $stmt = mysqli_prepare($conn, $query);
+                    if ($stmt) {
+                        mysqli_stmt_bind_param($stmt, "is", $product_id, $image_path);
+                        mysqli_stmt_execute($stmt);
+                        mysqli_stmt_close($stmt);
+                    } else {
+                        $error_message = 'Failed to insert image path: ' . mysqli_error($conn);
+                        break;
+                    }
+                }
                 $success_message = 'Product updated successfully!';
                 // Refresh product data
-                $query = "SELECT product_id, product_name, category, description, product_image, in_stock, sold, price FROM products WHERE product_id = ? AND seller_id = ?";
+                $query = "SELECT product_id, product_name, category, description, in_stock, sold, price FROM products WHERE product_id = ? AND seller_id = ?";
                 $stmt = mysqli_prepare($conn, $query);
-                mysqli_stmt_bind_param($stmt, "si", $product_id, $user_id);
+                mysqli_stmt_bind_param($stmt, "ii", $product_id, $user_id);
                 mysqli_stmt_execute($stmt);
                 $result = mysqli_stmt_get_result($stmt);
                 $product = mysqli_fetch_assoc($result);
+                // Refresh images
+                $images = [];
+                $query = "SELECT image_id, image_path FROM product_images WHERE product_id = ?";
+                $stmt = mysqli_prepare($conn, $query);
+                if ($stmt) {
+                    mysqli_stmt_bind_param($stmt, "i", $product_id);
+                    mysqli_stmt_execute($stmt);
+                    $result = mysqli_stmt_get_result($stmt);
+                    while ($row = mysqli_fetch_assoc($result)) {
+                        $images[] = $row;
+                    }
+                    mysqli_stmt_close($stmt);
+                }
             } else {
                 $error_message = 'Product update failed: ' . mysqli_error($conn);
             }
@@ -156,16 +221,46 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
                     </div>
                     <div class="form-group">
                         <label for="category">Category</label>
-                        <input type="text" id="category" name="category" placeholder="Category" value="<?php echo htmlspecialchars($product['category'] ?? ''); ?>" required>
+                        <select id="category" name="category" required>
+                            <option value="" disabled>Select a category</option>
+                            <option value="Electronics & Accessories" <?php echo $product['category'] === 'Electronics & Accessories' ? 'selected' : ''; ?>>Electronics & Accessories</option>
+                            <option value="Home Appliances & Living Essentials" <?php echo $product['category'] === 'Home Appliances & Living Essentials' ? 'selected' : ''; ?>>Home Appliances & Living Essentials</option>
+                            <option value="Clothing & Accessories" <?php echo $product['category'] === 'Clothing & Accessories' ? 'selected' : ''; ?>>Clothing & Accessories</option>
+                            <option value="Beauty & Personal Care" <?php echo $product['category'] === 'Beauty & Personal Care' ? 'selected' : ''; ?>>Beauty & Personal Care</option>
+                            <option value="Food & Beverages" <?php echo $product['category'] === 'Food & Beverages' ? 'selected' : ''; ?>>Food & Beverages</option>
+                            <option value="Home & Furniture" <?php echo $product['category'] === 'Home & Furniture' ? 'selected' : ''; ?>>Home & Furniture</option>
+                            <option value="Sports & Outdoor Equipment" <?php echo $product['category'] === 'Sports & Outdoor Equipment' ? 'selected' : ''; ?>>Sports & Outdoor Equipment</option>
+                            <option value="Automotive & Motorcycle Accessories" <?php echo $product['category'] === 'Automotive & Motorcycle Accessories' ? 'selected' : ''; ?>>Automotive & Motorcycle Accessories</option>
+                            <option value="Baby & Maternity Products" <?php echo $product['category'] === 'Baby & Maternity Products' ? 'selected' : ''; ?>>Baby & Maternity Products</option>
+                            <option value="Books & Office Supplies" <?php echo $product['category'] === 'Books & Office Supplies' ? 'selected' : ''; ?>>Books & Office Supplies</option>
+                            <option value="Other" <?php echo $product['category'] === 'Other' ? 'selected' : ''; ?>>Other</option>
+                        </select>
                     </div>
                     <div class="form-group">
                         <label for="description">Description</label>
                         <input type="text" id="description" name="description" placeholder="Description" value="<?php echo htmlspecialchars($product['description'] ?? ''); ?>" required>
                     </div>
                     <div class="form-group">
-                        <label for="product_image">Product Image</label>
-                        <input type="file" id="product_image" name="product_image" accept="image/jpeg,image/png,image/gif">
-                        <p>Current Image: <img src="<?php echo htmlspecialchars($product['product_image'] ?? 'images/default_product.png'); ?>" alt="Current Image" style="max-width: 100px;"></p>
+                        <label>Current Images</label>
+                        <div class="image-preview">
+                            <?php if (empty($images)): ?>
+                                <p>No images uploaded.</p>
+                            <?php else: ?>
+                                <?php foreach ($images as $image): ?>
+                                    <div class="image-item">
+                                        <img src="<?php echo htmlspecialchars($image['image_path']); ?>" alt="Product Image" style="max-width: 100px;">
+                                        <label>
+                                            <input type="checkbox" name="delete_images[]" value="<?php echo $image['image_id']; ?>">
+                                            Delete this image
+                                        </label>
+                                    </div>
+                                <?php endforeach; ?>
+                            <?php endif; ?>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label for="product_images">Add New Images (Select multiple)</label>
+                        <input type="file" id="product_images" name="product_images[]" accept="image/jpeg,image/png,image/gif" multiple>
                     </div>
                     <div class="form-group">
                         <label for="in_stock">In Stock</label>
