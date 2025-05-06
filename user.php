@@ -9,7 +9,7 @@ if (!isset($_SESSION['user_id'])) {
 
 $user_id = $_SESSION['user_id'];
 
-// 查詢用戶資訊
+// Query user info
 $query = "SELECT user_name, account, fullname, address, phone, user_picture FROM users WHERE user_id = ? LIMIT 1";
 $stmt = mysqli_prepare($conn, $query);
 mysqli_stmt_bind_param($stmt, "i", $user_id);
@@ -18,7 +18,7 @@ $result = mysqli_stmt_get_result($stmt);
 $user = mysqli_fetch_assoc($result);
 mysqli_stmt_close($stmt);
 
-// 處理表單提交
+// Handle form submissions
 $success_message = '';
 $error_message = '';
 $active_section = isset($_GET['section']) ? $_GET['section'] : 'my-account';
@@ -59,43 +59,33 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 }
                 break;
 
-            case 'add_product':
-                $product_id = trim($_POST['product_id'] ?? '');
-                $product_name = trim($_POST['product_name'] ?? '');
-                $category = trim($_POST['category'] ?? '');
-                $seller_id = $user_id;
-                $description = trim($_POST['description'] ?? '');
-                $in_stock = (int)($_POST['in_stock'] ?? 0);
-                $sold = (int)($_POST['sold'] ?? 0);
-                $price = (int)($_POST['price'] ?? 0);
-                $create_at = date('Y-m-d H:i:s');
-                $update_at = $create_at;
-
-                $product_image = 'images/default_product.png';
-                if (isset($_FILES['product_image']) && $_FILES['product_image']['error'] === UPLOAD_ERR_OK) {
-                    $upload_dir = __DIR__ . '/images/';
-                    if (!is_dir($upload_dir)) {
-                        mkdir($upload_dir, 0777, true);
+            case 'delete_product':
+                $product_id = (int)($_POST['product_id'] ?? 0);
+                if ($product_id > 0) {
+                    // Verify the product belongs to the user
+                    $query = "SELECT COUNT(*) as count FROM products WHERE product_id = ? AND seller_id = ?";
+                    $stmt = mysqli_prepare($conn, $query);
+                    mysqli_stmt_bind_param($stmt, "ii", $product_id, $user_id);
+                    mysqli_stmt_execute($stmt);
+                    $result = mysqli_stmt_get_result($stmt);
+                    $row = mysqli_fetch_assoc($result);
+                    if ($row['count'] > 0) {
+                        // Delete the product
+                        $query = "DELETE FROM products WHERE product_id = ? AND seller_id = ?";
+                        $stmt = mysqli_prepare($conn, $query);
+                        mysqli_stmt_bind_param($stmt, "ii", $product_id, $user_id);
+                        if (mysqli_stmt_execute($stmt)) {
+                            $success_message = 'Product deleted successfully!';
+                        } else {
+                            $error_message = 'Product deletion failed: ' . mysqli_error($conn);
+                        }
+                    } else {
+                        $error_message = 'Product not found or you do not have permission to delete it.';
                     }
-                    $file_tmp = $_FILES['product_image']['tmp_name'];
-                    $file_name = basename($_FILES['product_image']['name']);
-                    $new_file_name = 'product_' . uniqid() . '.' . pathinfo($file_name, PATHINFO_EXTENSION);
-                    $destination = $upload_dir . $new_file_name;
-
-                    if (move_uploaded_file($file_tmp, $destination)) {
-                        $product_image = 'images/' . $new_file_name;
-                    }
-                }
-
-                $query = "INSERT INTO products (product_id, product_name, category, seller_id, description, product_image, in_stock, sold, price, create_at, update_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
-                $stmt = mysqli_prepare($conn, $query);
-                mysqli_stmt_bind_param($stmt, "ssssssiiiss", $product_id, $product_name, $category, $seller_id, $description, $product_image, $in_stock, $sold, $price, $create_at, $update_at);
-                if (mysqli_stmt_execute($stmt)) {
-                    $success_message = 'Product added successfully!';
+                    mysqli_stmt_close($stmt);
                 } else {
-                    $error_message = 'Product addition failed: ' . mysqli_error($conn);
+                    $error_message = 'Invalid product ID.';
                 }
-                mysqli_stmt_close($stmt);
                 break;
 
             case 'logout':
@@ -124,6 +114,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 break;
         }
     }
+}
+
+// Query user's products (only for my-product section)
+$products = [];
+if ($active_section === 'my-product') {
+    $query = "SELECT product_id, product_name, category, description, product_image, in_stock, sold, price FROM products WHERE seller_id = ?";
+    $stmt = mysqli_prepare($conn, $query);
+    mysqli_stmt_bind_param($stmt, "i", $user_id);
+    mysqli_stmt_execute($stmt);
+    $result = mysqli_stmt_get_result($stmt);
+    while ($row = mysqli_fetch_assoc($result)) {
+        $products[] = $row;
+    }
+    mysqli_stmt_close($stmt);
 }
 ?>
 
@@ -208,42 +212,32 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             <?php elseif ($active_section === 'my-product'): ?>
                 <h2>My Product</h2>
                 <div class="form-section">
-                    <form method="POST" action="" enctype="multipart/form-data">
-                        <input type="hidden" name="action" value="add_product">
-                        <div class="form-group">
-                            <label for="product_id">Product ID</label>
-                            <input type="text" id="product_id" name="product_id" placeholder="Product ID" required>
+                    <a href="add_product.php" class="create-btn">Add Product</a>
+                    <?php if (empty($products)): ?>
+                        <p>You haven't uploaded any products yet.</p>
+                    <?php else: ?>
+                        <div class="product-grid">
+                            <?php foreach ($products as $product): ?>
+                                <div class="product-card">
+                                    <img src="<?php echo htmlspecialchars($product['product_image'] ?? 'images/product/default_product_img.png'); ?>" alt="Product Image">
+                                    <h3><?php echo htmlspecialchars($product['product_name'] ?? 'No Name'); ?></h3>
+                                    <p><strong>Category:</strong> <?php echo htmlspecialchars($product['category'] ?? 'N/A'); ?></p>
+                                    <p><strong>Description:</strong> <?php echo htmlspecialchars($product['description'] ?? 'N/A'); ?></p>
+                                    <p><strong>In Stock:</strong> <?php echo htmlspecialchars($product['in_stock'] ?? 0); ?></p>
+                                    <p><strong>Sold:</strong> <?php echo htmlspecialchars($product['sold'] ?? 0); ?></p>
+                                    <p><strong>Price:</strong> $<?php echo htmlspecialchars(number_format($product['price'], 2) ?? '0.00'); ?></p>
+                                    <div class="product-actions">
+                                        <a href="edit_product.php?product_id=<?php echo htmlspecialchars($product['product_id']); ?>" class="create-btn">Edit Product</a>
+                                        <form method="POST" action="" onsubmit="return confirm('Are you sure you want to delete this product?');">
+                                            <input type="hidden" name="action" value="delete_product">
+                                            <input type="hidden" name="product_id" value="<?php echo htmlspecialchars($product['product_id']); ?>">
+                                            <button type="submit" class="delete-btn">Delete Product</button>
+                                        </form>
+                                    </div>
+                                </div>
+                            <?php endforeach; ?>
                         </div>
-                        <div class="form-group">
-                            <label for="product_name">Product Name</label>
-                            <input type="text" id="product_name" name="product_name" placeholder="Product Name" required>
-                        </div>
-                        <div class="form-group">
-                            <label for="category">Category</label>
-                            <input type="text" id="category" name="category" placeholder="Category" required>
-                        </div>
-                        <div class="form-group">
-                            <label for="description">Description</label>
-                            <input type="text" id="description" name="description" placeholder="Description" required>
-                        </div>
-                        <div class="form-group">
-                            <label for="product_image">Product Image</label>
-                            <input type="file" id="product_image" name="product_image" accept="image/jpeg,image/png,image/gif">
-                        </div>
-                        <div class="form-group">
-                            <label for="in_stock">In Stock</label>
-                            <input type="number" id="in_stock" name="in_stock" placeholder="In Stock" required>
-                        </div>
-                        <div class="form-group">
-                            <label for="sold">Sold</label>
-                            <input type="number" id="sold" name="sold" placeholder="Sold" value="0">
-                        </div>
-                        <div class="form-group">
-                            <label for="price">Price</label>
-                            <input type="number" id="price" name="price" placeholder="Price" step="0.01" required>
-                        </div>
-                        <button type="submit" class="create-btn">Add Product</button>
-                    </form>
+                    <?php endif; ?>
                 </div>
 
             <?php elseif ($active_section === 'logout'): ?>
@@ -286,7 +280,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         <p>© 2025 E-Shop System</p>
     </footer>
     <script>
-        // 顯示/隱藏密碼功能
+        // Show/hide password functionality
         document.querySelectorAll('.toggle-password').forEach(button => {
             button.addEventListener('click', function(e) {
                 e.preventDefault();
