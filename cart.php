@@ -8,15 +8,79 @@ if (!isset($_SESSION['user_id'])) {
 }
 
 $user_id = $_SESSION['user_id'];
-$query = "SELECT c.*, p.product_name, p.product_image, p.price FROM cart c JOIN products p ON c.product_id = p.product_id WHERE c.user_id = ?";
+
+// Check if cart table exists
+$check_table_query = "SHOW TABLES LIKE 'cart'";
+$result = mysqli_query($conn, $check_table_query);
+if (mysqli_num_rows($result) == 0) {
+    die("Error: The 'cart' table does not exist in the database. Please contact the administrator or create the table.");
+}
+
+// Handle remove item
+if (isset($_GET['remove']) && is_numeric($_GET['remove'])) {
+    $cart_id = (int)$_GET['remove'];
+    $query = "DELETE FROM cart WHERE cart_id = ? AND user_id = ?";
+    $stmt = mysqli_prepare($conn, $query);
+    if ($stmt) {
+        mysqli_stmt_bind_param($stmt, "ii", $cart_id, $user_id);
+        mysqli_stmt_execute($stmt);
+        mysqli_stmt_close($stmt);
+    }
+    header("Location: cart.php");
+    exit;
+}
+
+// Handle clear cart
+if (isset($_GET['clear']) && $_GET['clear'] === 'true') {
+    $query = "DELETE FROM cart WHERE user_id = ?";
+    $stmt = mysqli_prepare($conn, $query);
+    if ($stmt) {
+        mysqli_stmt_bind_param($stmt, "i", $user_id);
+        mysqli_stmt_execute($stmt);
+        mysqli_stmt_close($stmt);
+    }
+    header("Location: cart.php");
+    exit;
+}
+
+// Fetch cart items with seller info
+$query = "SELECT c.cart_id, c.product_id, c.quantity, p.product_name, p.price, 
+                 COALESCE(pi.image_path, 'images/product/default_product_img.png') as product_image,
+                 p.seller_id, COALESCE(u.user_name, u.fullname, 'Unknown') as seller_name
+          FROM cart c
+          JOIN products p ON c.product_id = p.product_id
+          LEFT JOIN product_images pi ON p.product_id = pi.product_id AND pi.image_id = (
+              SELECT MIN(image_id) FROM product_images WHERE product_id = p.product_id
+          )
+          JOIN users u ON p.seller_id = u.user_id
+          WHERE c.user_id = ?
+          ORDER BY u.user_name, p.product_name";
 $stmt = mysqli_prepare($conn, $query);
+if (!$stmt) {
+    die("Query preparation failed: " . mysqli_error($conn));
+}
 mysqli_stmt_bind_param($stmt, "i", $user_id);
 mysqli_stmt_execute($stmt);
 $result = mysqli_stmt_get_result($stmt);
 $cart_items = mysqli_fetch_all($result, MYSQLI_ASSOC);
 mysqli_stmt_close($stmt);
+
+// Group cart items by seller
+$seller_groups = [];
+foreach ($cart_items as $item) {
+    $seller_id = $item['seller_id'];
+    if (!isset($seller_groups[$seller_id])) {
+        $seller_groups[$seller_id] = [
+            'seller_name' => $item['seller_name'],
+            'items' => []
+        ];
+    }
+    $seller_groups[$seller_id]['items'][] = $item;
+}
+
 mysqli_close($conn);
 ?>
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -43,24 +107,32 @@ mysqli_close($conn);
         </div>
     </header>
     <main>
-        <section class="product-display" style="padding: 50px;">
+        <section class="product-display">
             <h2>Your Cart</h2>
-            <?php if (empty($cart_items)) { ?>
-                <p>Your cart is empty.</p>
+            <?php if (empty($seller_groups)) { ?>
+                <p class="cart-empty">Your cart is empty.</p>
             <?php } else { ?>
-                <?php foreach ($cart_items as $item) { ?>
-                    <div class="product-card" style="display: flex; align-items: center; gap: 20px;">
-                        <img src="<?php echo htmlspecialchars($item['product_image']); ?>" alt="<?php echo htmlspecialchars($item['product_name']); ?>" style="width: 100px; height: 100px; object-fit: cover;">
-                        <div>
-                            <h3><?php echo htmlspecialchars($item['product_name']); ?></h3>
-                            <p>Price: $<?php echo htmlspecialchars($item['price']); ?></p>
-                            <p>Quantity: <?php echo htmlspecialchars($item['quantity']); ?></p>
-                            <a href="?remove=<?php echo $item['cart_id']; ?>" style="color: #BB9A88;">Remove</a>
+                <?php foreach ($seller_groups as $seller_id => $group) { ?>
+                    <div class="seller-group">
+                        <h3 class="seller-title">Sold by: <?php echo htmlspecialchars($group['seller_name']); ?></h3>
+                        <div class="cart-items">
+                            <?php foreach ($group['items'] as $item) { ?>
+                                <div class="cart-item">
+                                    <img src="<?php echo htmlspecialchars($item['product_image']); ?>" alt="<?php echo htmlspecialchars($item['product_name']); ?>" class="cart-item-image">
+                                    <div class="cart-item-details">
+                                        <h4><?php echo htmlspecialchars($item['product_name']); ?></h4>
+                                        <p>Price: $<?php echo htmlspecialchars(number_format($item['price'], 2)); ?></p>
+                                        <p>Quantity: <?php echo htmlspecialchars($item['quantity']); ?></p>
+                                        <a href="?remove=<?php echo $item['cart_id']; ?>" class="remove-link">Remove</a>
+                                    </div>
+                                </div>
+                            <?php } ?>
                         </div>
                     </div>
                 <?php } ?>
-                <div style="text-align: center; margin-top: 20px;">
-                    <a href="checkout.php" class="category-btn" style="display: inline-block;">Proceed to Checkout</a>
+                <div class="cart-actions">
+                    <a href="checkout.php" class="action-btn checkout-btn">Proceed to Checkout</a>
+                    <a href="?clear=true" class="action-btn clear-cart-btn" onclick="return confirm('Are you sure you want to clear your cart?');">Clear Cart</a>
                 </div>
             <?php } ?>
         </section>
@@ -68,6 +140,5 @@ mysqli_close($conn);
     <footer>
         <p>© 2025 E-Shop System</p>
     </footer>
-    <script src="js/script.js"></script>
 </body>
 </html>

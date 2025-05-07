@@ -134,9 +134,29 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 // Query user's products and images (only for my-product section)
 $products = [];
 if ($active_section === 'my-product') {
-    $query = "SELECT product_id, product_name, category, description, in_stock, sold, price FROM products WHERE seller_id = ?";
-    $stmt = mysqli_prepare($conn, $query);
+    // Pagination parameters
+    $page = isset($_GET['page']) && is_numeric($_GET['page']) && $_GET['page'] > 0 ? (int)$_GET['page'] : 1;
+    $limit = 2; // Changed to 2 products per page
+    $offset = ($page - 1) * $limit;
+
+    // Count total products
+    $count_query = "SELECT COUNT(*) as total FROM products WHERE seller_id = ?";
+    $stmt = mysqli_prepare($conn, $count_query);
     mysqli_stmt_bind_param($stmt, "i", $user_id);
+    mysqli_stmt_execute($stmt);
+    $result = mysqli_stmt_get_result($stmt);
+    $total_products = mysqli_fetch_assoc($result)['total'];
+    mysqli_stmt_close($stmt);
+
+    $total_pages = ceil($total_products / $limit);
+
+    // Fetch paginated products
+    $query = "SELECT product_id, product_name, category, description, in_stock, sold, price 
+              FROM products 
+              WHERE seller_id = ? 
+              LIMIT ? OFFSET ?";
+    $stmt = mysqli_prepare($conn, $query);
+    mysqli_stmt_bind_param($stmt, "iii", $user_id, $limit, $offset);
     mysqli_stmt_execute($stmt);
     $result = mysqli_stmt_get_result($stmt);
     while ($row = mysqli_fetch_assoc($result)) {
@@ -249,6 +269,9 @@ if ($active_section === 'my-product') {
                     <?php if (empty($products)): ?>
                         <p>You haven't uploaded any products yet.</p>
                     <?php else: ?>
+                        <p class="product-count">
+                            Showing <?php echo ($offset + 1); ?>-<?php echo min($offset + $limit, $total_products); ?> of <?php echo $total_products; ?> products
+                        </p>
                         <div class="product-grid">
                             <?php foreach ($products as $product): ?>
                                 <div class="product-card">
@@ -289,6 +312,7 @@ if ($active_section === 'my-product') {
                                     <div class="product-info">
                                         <h3><?php echo htmlspecialchars($product['product_name'] ?? 'No Name'); ?></h3>
                                         <p><strong>Category:</strong> <?php echo htmlspecialchars($product['category'] ?? 'N/A'); ?></p>
+                                        <p class="description"><strong>Description:</strong> <?php echo htmlspecialchars(substr($product['description'] ?? 'N/A', 0, 50)) . (strlen($product['description'] ?? '') > 50 ? '...' : ''); ?></p>
                                         <p class="stock"><strong>In Stock:</strong> <?php echo htmlspecialchars($product['in_stock'] ?? 0); ?></p>
                                         <p><strong>Sold:</strong> <?php echo htmlspecialchars($product['sold'] ?? 0); ?></p>
                                         <p class="price"><strong>Price:</strong> $<?php echo htmlspecialchars(number_format($product['price'], 2) ?? '0.00'); ?></p>
@@ -303,6 +327,15 @@ if ($active_section === 'my-product') {
                                     </div>
                                 </div>
                             <?php endforeach; ?>
+                        </div>
+                        <div class="pagination">
+                            <?php
+                            $prev_page = $page > 1 ? $page - 1 : 1;
+                            $next_page = $page < $total_pages ? $page + 1 : $total_pages;
+                            ?>
+                            <a href="?section=my-product&page=<?php echo $prev_page; ?>" class="page-btn <?php echo $page <= 1 ? 'disabled' : ''; ?>">Previous</a>
+                            <span>Page <?php echo $page; ?> of <?php echo $total_pages; ?></span>
+                            <a href="?section=my-product&page=<?php echo $next_page; ?>" class="page-btn <?php echo $page >= $total_pages ? 'disabled' : ''; ?>">Next</a>
                         </div>
                     <?php endif; ?>
                 </div>
