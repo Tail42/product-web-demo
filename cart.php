@@ -9,6 +9,20 @@ if (!isset($_SESSION['user_id'])) {
 
 $user_id = $_SESSION['user_id'];
 
+// Fetch user picture
+$user_picture = 'images/default_user.png';
+$query = "SELECT user_picture FROM users WHERE user_id = ? LIMIT 1";
+$stmt = mysqli_prepare($conn, $query);
+if ($stmt) {
+    mysqli_stmt_bind_param($stmt, "i", $user_id);
+    mysqli_stmt_execute($stmt);
+    $result = mysqli_stmt_get_result($stmt);
+    if ($row = mysqli_fetch_assoc($result)) {
+        $user_picture = htmlspecialchars($row['user_picture'] ?? 'images/default_user.png');
+    }
+    mysqli_stmt_close($stmt);
+}
+
 // Check if cart table exists
 $check_table_query = "SHOW TABLES LIKE 'cart'";
 $result = mysqli_query($conn, $check_table_query);
@@ -30,12 +44,13 @@ if (isset($_GET['remove']) && is_numeric($_GET['remove'])) {
     exit;
 }
 
-// Handle clear cart
-if (isset($_GET['clear']) && $_GET['clear'] === 'true') {
-    $query = "DELETE FROM cart WHERE user_id = ?";
+// Handle delete seller's order
+if (isset($_GET['delete_seller']) && is_numeric($_GET['delete_seller'])) {
+    $seller_id = (int)$_GET['delete_seller'];
+    $query = "DELETE FROM cart WHERE user_id = ? AND product_id IN (SELECT product_id FROM products WHERE seller_id = ?)";
     $stmt = mysqli_prepare($conn, $query);
     if ($stmt) {
-        mysqli_stmt_bind_param($stmt, "i", $user_id);
+        mysqli_stmt_bind_param($stmt, "ii", $user_id, $seller_id);
         mysqli_stmt_execute($stmt);
         mysqli_stmt_close($stmt);
     }
@@ -57,7 +72,8 @@ $query = "SELECT c.cart_id, c.product_id, c.quantity, p.product_name, p.price,
           ORDER BY u.user_name, p.product_name";
 $stmt = mysqli_prepare($conn, $query);
 if (!$stmt) {
-    die("Query preparation failed: " . mysqli_error($conn));
+    error_log("Query preparation failed: " . mysqli_error($conn));
+    die("Error: Unable to fetch cart items. Please try again later.");
 }
 mysqli_stmt_bind_param($stmt, "i", $user_id);
 mysqli_stmt_execute($stmt);
@@ -69,6 +85,8 @@ mysqli_stmt_close($stmt);
 $seller_groups = [];
 foreach ($cart_items as $item) {
     $seller_id = $item['seller_id'];
+    // Debug logging
+    error_log("Cart item: product_id={$item['product_id']}, quantity={$item['quantity']}");
     if (!isset($seller_groups[$seller_id])) {
         $seller_groups[$seller_id] = [
             'seller_name' => $item['seller_name'],
@@ -100,7 +118,7 @@ mysqli_close($conn);
                 </form>
             </div>
             <div class="user-function">
-                <a href="user.php"><img src="<?php echo htmlspecialchars($_SESSION['user_photo'] ?? 'images/default_user.png'); ?>" alt="Profile" class="user-pic"></a>
+                <a href="user.php"><img src="<?php echo $user_picture; ?>" alt="Profile" class="user-pic"></a>
                 <a href="cart.php">Cart</a>
                 <a href="php/logout.php">Logout</a>
             </div>
@@ -121,19 +139,19 @@ mysqli_close($conn);
                                     <img src="<?php echo htmlspecialchars($item['product_image']); ?>" alt="<?php echo htmlspecialchars($item['product_name']); ?>" class="cart-item-image">
                                     <div class="cart-item-details">
                                         <h4><?php echo htmlspecialchars($item['product_name']); ?></h4>
-                                        <p>Price: $<?php echo htmlspecialchars(number_format($item['price'], 2)); ?></p>
                                         <p>Quantity: <?php echo htmlspecialchars($item['quantity']); ?></p>
+                                        <p>Price: $<?php echo htmlspecialchars(number_format($item['price'], 2)); ?></p>
                                         <a href="?remove=<?php echo $item['cart_id']; ?>" class="remove-link">Remove</a>
                                     </div>
                                 </div>
                             <?php } ?>
                         </div>
+                        <div class="seller-actions">
+                            <a href="checkout.php?seller_id=<?php echo $seller_id; ?>" class="action-btn checkout-btn">Checkout</a>
+                            <a href="?delete_seller=<?php echo $seller_id; ?>" class="action-btn delete-seller-btn" onclick="return confirm('Remove all items from this seller?');">Delete Order</a>
+                        </div>
                     </div>
                 <?php } ?>
-                <div class="cart-actions">
-                    <a href="checkout.php" class="action-btn checkout-btn">Proceed to Checkout</a>
-                    <a href="?clear=true" class="action-btn clear-cart-btn" onclick="return confirm('Are you sure you want to clear your cart?');">Clear Cart</a>
-                </div>
             <?php } ?>
         </section>
     </main>

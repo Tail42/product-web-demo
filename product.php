@@ -56,6 +56,9 @@ $image_paths = $product['image_paths'] ? explode(',', $product['image_paths']) :
     <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
+    <div id="cart-notification" class="notification" style="display: none;" role="alert">
+        Product added to cart!
+    </div>
     <header>
         <div class="main-banner">
             <a href="index.php" class="logo">E-Shop System</a>
@@ -79,6 +82,10 @@ $image_paths = $product['image_paths'] ? explode(',', $product['image_paths']) :
     </header>
     <main>
         <section class="product-display">
+            <h1>Product Details</h1>
+            <div class="navigation-actions">
+                <a href="index.php" class="action-btn back-to-products">Back to Products</a>
+            </div>
             <div class="product-details">
                 <div class="product-image">
                     <div class="image-carousel">
@@ -99,15 +106,24 @@ $image_paths = $product['image_paths'] ? explode(',', $product['image_paths']) :
                     <p class="product-stock">In Stock: <?php echo htmlspecialchars($product['in_stock']); ?></p>
                     <p class="product-description"><?php echo htmlspecialchars($product['description'] ?? 'No description available.'); ?></p>
                     <div class="product-actions">
-                        <?php if (isset($_SESSION['user_id'])) { ?>
-                            <form action="php/add_to_cart.php" method="POST">
-                                <input type="hidden" name="product_id" value="<?php echo $product_id; ?>">
-                                <button type="submit" class="action-btn add-to-cart">Add to Cart</button>
-                            </form>
-                        <?php } else { ?>
+                        <?php if (isset($_SESSION['user_id'])) {
+                            if ($_SESSION['user_id'] == $product['seller_id']) { ?>
+                                <button type="button" class="action-btn" disabled>You cannot add your own product</button>
+                            <?php } else { ?>
+                                <form action="php/add_to_cart.php" method="POST">
+                                    <input type="hidden" name="product_id" value="<?php echo $product_id; ?>">
+                                    <div class="quantity-control">
+                                        <button type="button" class="quantity-btn decrement" aria-label="Decrease quantity" onclick="decrementQuantity()">−</button>
+                                        <input type="number" name="quantity" value="1" min="1" max="<?php echo $product['in_stock']; ?>" pattern="[0-9]*" required onchange="validateQuantity()" oninput="validateQuantity()" onblur="validateQuantity()">
+                                        <button type="button" class="quantity-btn increment" aria-label="Increase quantity" onclick="incrementQuantity()">+</button>
+                                    </div>
+                                    <div class="error-message" id="quantity-error" style="display: none;" role="alert">Cannot exceed stock quantity!</div>
+                                    <button type="submit" class="action-btn add-to-cart">Add to Cart</button>
+                                </form>
+                            <?php }
+                        } else { ?>
                             <a href="login.php" class="action-btn login-to-cart">Login to Add to Cart</a>
                         <?php } ?>
-                        <a href="index.php" class="action-btn back-to-products">Back to Products</a>
                     </div>
                 </div>
             </div>
@@ -117,6 +133,7 @@ $image_paths = $product['image_paths'] ? explode(',', $product['image_paths']) :
         <p>© 2025 E-Shop System</p>
     </footer>
     <script>
+        // Carousel
         const images = <?php echo json_encode($image_paths); ?>;
         let currentIndex = 0;
         const imgElement = document.querySelector('.carousel-image[data-product-id="<?php echo $product_id; ?>"]');
@@ -135,6 +152,83 @@ $image_paths = $product['image_paths'] ? explode(',', $product['image_paths']) :
         nextButton.addEventListener('click', () => {
             currentIndex = (currentIndex + 1) % images.length;
             updateImage();
+        });
+
+        // Quantity Controls
+        function updateButtons() {
+            const input = document.querySelector('input[name="quantity"]');
+            const value = parseInt(input.value) || 1;
+            const max = parseInt(input.max);
+            document.querySelector('.quantity-btn.decrement').disabled = value <= 1;
+            document.querySelector('.quantity-btn.increment').disabled = value >= max;
+        }
+
+        function incrementQuantity() {
+            const input = document.querySelector('input[name="quantity"]');
+            const max = parseInt(input.max);
+            let value = parseInt(input.value) || 1;
+            if (value < max) {
+                input.value = value + 1;
+                hideError();
+            } else {
+                input.value = max;
+                showError();
+            }
+            updateButtons();
+        }
+
+        function decrementQuantity() {
+            const input = document.querySelector('input[name="quantity"]');
+            let value = parseInt(input.value) || 1;
+            if (value > 1) {
+                input.value = value - 1;
+                hideError();
+            }
+            updateButtons();
+        }
+
+        function validateQuantity() {
+            const input = document.querySelector('input[name="quantity"]');
+            const max = parseInt(input.max);
+            let value = parseInt(input.value);
+            if (isNaN(value) || value < 1) {
+                input.value = 1;
+                hideError();
+            } else if (value > max) {
+                input.value = max;
+                showError();
+            } else {
+                input.value = value;
+                hideError();
+            }
+            updateButtons();
+        }
+
+        function showError() {
+            document.getElementById('quantity-error').style.display = 'block';
+        }
+
+        function hideError() {
+            document.getElementById('quantity-error').style.display = 'none';
+        }
+
+        // Initialize
+        validateQuantity();
+        updateButtons();
+
+        // Notification
+        if (<?php echo isset($_GET['added']) && $_GET['added'] == '1' ? 'true' : 'false'; ?>) {
+            const notification = document.getElementById('cart-notification');
+            notification.style.display = 'block';
+            setTimeout(() => {
+                notification.style.display = 'none';
+            }, 3000);
+        }
+
+        // Debug form submission
+        document.querySelector('form').addEventListener('submit', (e) => {
+            validateQuantity();
+            console.log('Quantity:', document.querySelector('input[name="quantity"]').value);
         });
     </script>
     <?php mysqli_close($conn); ?>
