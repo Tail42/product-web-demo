@@ -2,21 +2,49 @@
 session_start();
 include 'config.php';
 
+// Fetch user picture
+$user_picture = 'images/default_user.png';
+if (isset($_SESSION['user_id'])) {
+    $user_id = $_SESSION['user_id'];
+    $query = "SELECT user_picture FROM users WHERE user_id = ? LIMIT 1";
+    $stmt = mysqli_prepare($conn, $query);
+    if ($stmt) {
+        mysqli_stmt_bind_param($stmt, "i", $user_id);
+        mysqli_stmt_execute($stmt);
+        $result = mysqli_stmt_get_result($stmt);
+        if ($row = mysqli_fetch_assoc($result)) {
+            $user_picture = htmlspecialchars($row['user_picture'] ?? 'images/default_user.png');
+        }
+        mysqli_stmt_close($stmt);
+    }
+}
+
+// Fetch product details and images
 $product_id = isset($_GET['id']) ? (int)$_GET['id'] : 0;
-$query = "SELECT * FROM products WHERE product_id = ? LIMIT 1";
+$query = "SELECT p.product_id, p.product_name, p.price, p.in_stock, 
+                 COALESCE(GROUP_CONCAT(pi.image_path ORDER BY pi.image_id), 'images/product/default_product_img.png') as image_paths
+          FROM products p
+          LEFT JOIN product_images pi ON p.product_id = pi.product_id
+          WHERE p.product_id = ?
+          GROUP BY p.product_id, p.product_name, p.price, p.in_stock";
 $stmt = mysqli_prepare($conn, $query);
-mysqli_stmt_bind_param($stmt, "i", $product_id);
-mysqli_stmt_execute($stmt);
-$result = mysqli_stmt_get_result($stmt);
-$product = mysqli_fetch_assoc($result);
-mysqli_stmt_close($stmt);
-mysqli_close($conn);
+if ($stmt) {
+    mysqli_stmt_bind_param($stmt, "i", $product_id);
+    mysqli_stmt_execute($stmt);
+    $result = mysqli_stmt_get_result($stmt);
+    $product = mysqli_fetch_assoc($result);
+    mysqli_stmt_close($stmt);
+}
 
 if (!$product) {
     header("Location: index.php");
     exit;
 }
+
+// Split image_paths into an array
+$image_paths = $product['image_paths'] ? explode(',', $product['image_paths']) : ['images/product/default_product_img.png'];
 ?>
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -37,7 +65,7 @@ if (!$product) {
             </div>
             <div class="user-function">
                 <?php if (isset($_SESSION['user_id'])) { ?>
-                    <a href="user.php"><img src="<?php echo htmlspecialchars($_SESSION['user_photo'] ?? 'images/default_user.png'); ?>" alt="Profile" class="user-pic"></a>
+                    <a href="user.php"><img src="<?php echo $user_picture; ?>" alt="Profile" class="user-pic"></a>
                     <a href="cart.php">Cart</a>
                     <a href="php/logout.php">Logout</a>
                 <?php } else { ?>
@@ -50,8 +78,12 @@ if (!$product) {
     <main>
         <section class="product-display" style="padding: 50px; text-align: center;">
             <h2><?php echo htmlspecialchars($product['product_name']); ?></h2>
-            <img src="<?php echo htmlspecialchars($product['product_image']); ?>" alt="<?php echo htmlspecialchars($product['product_name']); ?>" style="max-width: 400px; margin: 20px auto;">
-            <p><strong>Price:</strong> $<?php echo htmlspecialchars($product['price']); ?></p>
+            <div class="image-carousel" style="max-width: 400px; margin: 20px auto;">
+                <button class="carousel-prev" data-product-id="<?php echo $product_id; ?>"><</button>
+                <img src="<?php echo htmlspecialchars($image_paths[0]); ?>" alt="<?php echo htmlspecialchars($product['product_name']); ?>" class="carousel-image" data-product-id="<?php echo $product_id; ?>">
+                <button class="carousel-next" data-product-id="<?php echo $product_id; ?>">></button>
+            </div>
+            <p><strong>Price:</strong> $<?php echo htmlspecialchars(number_format($product['price'], 2)); ?></p>
             <p><strong>Stock:</strong> <?php echo htmlspecialchars($product['in_stock']); ?></p>
             <?php if (isset($_SESSION['user_id'])) { ?>
                 <form action="php/add_to_cart.php" method="POST">
@@ -67,6 +99,27 @@ if (!$product) {
     <footer>
         <p>© 2025 E-Shop System</p>
     </footer>
-    <script src="js/script.js"></script>
+    <script>
+        const images = <?php echo json_encode($image_paths); ?>;
+        let currentIndex = 0;
+        const imgElement = document.querySelector('.carousel-image[data-product-id="<?php echo $product_id; ?>"]');
+        const prevButton = document.querySelector('.carousel-prev[data-product-id="<?php echo $product_id; ?>"]');
+        const nextButton = document.querySelector('.carousel-next[data-product-id="<?php echo $product_id; ?>"]');
+
+        function updateImage() {
+            imgElement.src = images[currentIndex];
+        }
+
+        prevButton.addEventListener('click', () => {
+            currentIndex = (currentIndex - 1 + images.length) % images.length;
+            updateImage();
+        });
+
+        nextButton.addEventListener('click', () => {
+            currentIndex = (currentIndex + 1) % images.length;
+            updateImage();
+        });
+    </script>
+    <?php mysqli_close($conn); ?>
 </body>
 </html>

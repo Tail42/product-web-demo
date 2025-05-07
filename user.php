@@ -252,10 +252,18 @@ if ($active_section === 'my-product') {
                         <div class="product-grid">
                             <?php foreach ($products as $product): ?>
                                 <div class="product-card">
-                                    <div class="image-carousel">
-                                        <button class="carousel-prev" data-product-id="<?php echo $product['product_id']; ?>"><</button>
+                                    <div class="photo-display">
+                                        <?php
+                                        // Stock badge
+                                        if ($product['in_stock'] < 5 && $product['in_stock'] > 0) {
+                                            echo '<span class="stock-badge">Low Stock</span>';
+                                        } elseif ($product['in_stock'] == 0) {
+                                            echo '<span class="stock-badge">Out of Stock</span>';
+                                        }
+                                        ?>
+                                        <button class="carousel-prev" data-product-id="<?php echo $product['product_id']; ?>">&lt;</button>
                                         <img src="<?php echo htmlspecialchars($product['images'][0]); ?>" alt="Product Image" class="carousel-image" data-product-id="<?php echo $product['product_id']; ?>">
-                                        <button class="carousel-next" data-product-id="<?php echo $product['product_id']; ?>">></button>
+                                        <button class="carousel-next" data-product-id="<?php echo $product['product_id']; ?>">&gt;</button>
                                         <script>
                                             const images<?php echo $product['product_id']; ?> = <?php echo json_encode($product['images']); ?>;
                                             let currentIndex<?php echo $product['product_id']; ?> = 0;
@@ -278,19 +286,20 @@ if ($active_section === 'my-product') {
                                             });
                                         </script>
                                     </div>
-                                    <h3><?php echo htmlspecialchars($product['product_name'] ?? 'No Name'); ?></h3>
-                                    <p><strong>Category:</strong> <?php echo htmlspecialchars($product['category'] ?? 'N/A'); ?></p>
-                                    <p><strong>Description:</strong> <?php echo htmlspecialchars($product['description'] ?? 'N/A'); ?></p>
-                                    <p><strong>In Stock:</strong> <?php echo htmlspecialchars($product['in_stock'] ?? 0); ?></p>
-                                    <p><strong>Sold:</strong> <?php echo htmlspecialchars($product['sold'] ?? 0); ?></p>
-                                    <p><strong>Price:</strong> $<?php echo htmlspecialchars(number_format($product['price'], 2) ?? '0.00'); ?></p>
-                                    <div class="product-actions">
-                                        <a href="edit_product.php?product_id=<?php echo htmlspecialchars($product['product_id']); ?>" class="create-btn">Edit Product</a>
-                                        <form method="POST" action="" onsubmit="return confirm('Are you sure you want to delete this product?');">
-                                            <input type="hidden" name="action" value="delete_product">
-                                            <input type="hidden" name="product_id" value="<?php echo htmlspecialchars($product['product_id']); ?>">
-                                            <button type="submit" class="delete-btn">Delete Product</button>
-                                        </form>
+                                    <div class="product-info">
+                                        <h3><?php echo htmlspecialchars($product['product_name'] ?? 'No Name'); ?></h3>
+                                        <p><strong>Category:</strong> <?php echo htmlspecialchars($product['category'] ?? 'N/A'); ?></p>
+                                        <p class="stock"><strong>In Stock:</strong> <?php echo htmlspecialchars($product['in_stock'] ?? 0); ?></p>
+                                        <p><strong>Sold:</strong> <?php echo htmlspecialchars($product['sold'] ?? 0); ?></p>
+                                        <p class="price"><strong>Price:</strong> $<?php echo htmlspecialchars(number_format($product['price'], 2) ?? '0.00'); ?></p>
+                                        <div class="product-actions">
+                                            <a href="edit_product.php?product_id=<?php echo htmlspecialchars($product['product_id']); ?>" class="edit-btn">Edit Product</a>
+                                            <form method="POST" action="" onsubmit="return confirm('Are you sure you want to delete this product?');">
+                                                <input type="hidden" name="action" value="delete_product">
+                                                <input type="hidden" name="product_id" value="<?php echo htmlspecialchars($product['product_id']); ?>">
+                                                <button type="submit" class="delete-btn">Delete Product</button>
+                                            </form>
+                                        </div>
                                     </div>
                                 </div>
                             <?php endforeach; ?>

@@ -22,9 +22,24 @@ if (isset($_SESSION['user_id'])) {
     }
 }
 
+// Define valid categories (aligned with database values from add_product.php)
+$valid_categories = [
+    'Electronics & Accessories',
+    'Home Appliances',
+    'Clothing & Accessories',
+    'Beauty & Personal Care',
+    'Food & Beverages',
+    'Home & Furniture',
+    'Sports & Outdoor',
+    'Automotive',
+    'Baby & Maternity',
+    'Books & Office',
+    'Other'
+];
+
 // Initialize search, category, and pagination parameters
 $search = isset($_GET['search']) ? trim($_GET['search']) : '';
-$category = isset($_GET['category']) ? trim($_GET['category']) : 'all';
+$category = isset($_GET['category']) && in_array(trim($_GET['category']), $valid_categories) ? trim($_GET['category']) : 'all';
 $page = isset($_GET['page']) && is_numeric($_GET['page']) && $_GET['page'] > 0 ? (int)$_GET['page'] : 1;
 $limit = 8;
 $offset = ($page - 1) * $limit;
@@ -34,8 +49,7 @@ $query = "SELECT p.product_id, p.product_name, p.price, p.in_stock,
                  COALESCE(GROUP_CONCAT(pi.image_path ORDER BY pi.image_id), 'images/product/default_product_img.png') as image_paths
           FROM products p
           LEFT JOIN product_images pi ON p.product_id = pi.product_id
-          WHERE 1=1
-          GROUP BY p.product_id, p.product_name, p.price, p.in_stock";
+          WHERE 1=1";
 $params = [];
 $types = '';
 
@@ -51,6 +65,16 @@ if ($category !== 'all') {
     $query .= " AND p.category = ?";
     $params[] = $category;
     $types .= 's';
+}
+
+$query .= " GROUP BY p.product_id, p.product_name, p.price, p.in_stock";
+
+// Debug: Log the query and parameters (remove in production)
+$debug = false; // Set to true to enable logging
+if ($debug) {
+    error_log("Query: $query");
+    error_log("Params: " . print_r($params, true));
+    error_log("Types: $types");
 }
 
 // Count total products for pagination
@@ -133,15 +157,15 @@ if ($stmt) {
             <div class="category-grid">
                 <button class="category-btn <?php echo $category === 'all' ? 'active' : ''; ?>" data-category="all">All Categories</button>
                 <button class="category-btn <?php echo $category === 'Electronics & Accessories' ? 'active' : ''; ?>" data-category="Electronics & Accessories">Electronics & Accessories</button>
-                <button class="category-btn <?php echo $category === 'Home Appliances & Living Essentials' ? 'active' : ''; ?>" data-category="Home Appliances & Living Essentials">Home Appliances</button>
+                <button class="category-btn <?php echo $category === 'Home Appliances' ? 'active' : ''; ?>" data-category="Home Appliances">Home Appliances</button>
                 <button class="category-btn <?php echo $category === 'Clothing & Accessories' ? 'active' : ''; ?>" data-category="Clothing & Accessories">Clothing & Accessories</button>
                 <button class="category-btn <?php echo $category === 'Beauty & Personal Care' ? 'active' : ''; ?>" data-category="Beauty & Personal Care">Beauty & Personal Care</button>
                 <button class="category-btn <?php echo $category === 'Food & Beverages' ? 'active' : ''; ?>" data-category="Food & Beverages">Food & Beverages</button>
                 <button class="category-btn <?php echo $category === 'Home & Furniture' ? 'active' : ''; ?>" data-category="Home & Furniture">Home & Furniture</button>
-                <button class="category-btn <?php echo $category === 'Sports & Outdoor Equipment' ? 'active' : ''; ?>" data-category="Sports & Outdoor Equipment">Sports & Outdoor</button>
-                <button class="category-btn <?php echo $category === 'Automotive & Motorcycle Accessories' ? 'active' : ''; ?>" data-category="Automotive & Motorcycle Accessories">Automotive</button>
-                <button class="category-btn <?php echo $category === 'Baby & Maternity Products' ? 'active' : ''; ?>" data-category="Baby & Maternity Products">Baby & Maternity</button>
-                <button class="category-btn <?php echo $category === 'Books & Office Supplies' ? 'active' : ''; ?>" data-category="Books & Office Supplies">Books & Office</button>
+                <button class="category-btn <?php echo $category === 'Sports & Outdoor' ? 'active' : ''; ?>" data-category="Sports & Outdoor">Sports & Outdoor</button>
+                <button class="category-btn <?php echo $category === 'Automotive' ? 'active' : ''; ?>" data-category="Automotive">Automotive</button>
+                <button class="category-btn <?php echo $category === 'Baby & Maternity' ? 'active' : ''; ?>" data-category="Baby & Maternity">Baby & Maternity</button>
+                <button class="category-btn <?php echo $category === 'Books & Office' ? 'active' : ''; ?>" data-category="Books & Office">Books & Office</button>
                 <button class="category-btn <?php echo $category === 'Other' ? 'active' : ''; ?>" data-category="Other">Other</button>
             </div>
         </section>
@@ -154,15 +178,23 @@ if ($stmt) {
                         $image_paths = $row['image_paths'] ? explode(',', $row['image_paths']) : ['images/product/default_product_img.png'];
                         $first_image = $image_paths[0];
                         echo '<div class="product-card">';
-                        echo '<div class="image-carousel">';
-                        echo '<button class="carousel-prev" data-product-id="' . htmlspecialchars($row['product_id']) . '"><</button>';
+                        echo '<div class="photo-display">';
+                        // Stock badge
+                        if ($row['in_stock'] < 5 && $row['in_stock'] > 0) {
+                            echo '<span class="stock-badge">Low Stock</span>';
+                        } elseif ($row['in_stock'] == 0) {
+                            echo '<span class="stock-badge">Out of Stock</span>';
+                        }
+                        echo '<button class="carousel-prev" data-product-id="' . htmlspecialchars($row['product_id']) . '">&lt;</button>';
                         echo '<img src="' . htmlspecialchars($first_image) . '" alt="' . htmlspecialchars($row['product_name']) . '" class="carousel-image" data-product-id="' . htmlspecialchars($row['product_id']) . '">';
-                        echo '<button class="carousel-next" data-product-id="' . htmlspecialchars($row['product_id']) . '">></button>';
+                        echo '<button class="carousel-next" data-product-id="' . htmlspecialchars($row['product_id']) . '">&gt;</button>';
                         echo '</div>';
+                        echo '<div class="product-info">';
                         echo '<h3>' . htmlspecialchars($row['product_name']) . '</h3>';
-                        echo '<p>Price: $' . htmlspecialchars(number_format($row['price'], 2)) . '</p>';
-                        echo '<p>Stock: ' . htmlspecialchars($row['in_stock']) . '</p>';
+                        echo '<p class="price">$' . htmlspecialchars(number_format($row['price'], 2)) . '</p>';
+                        echo '<p class="stock">Stock: ' . htmlspecialchars($row['in_stock']) . '</p>';
                         echo '<a href="product.php?id=' . htmlspecialchars($row['product_id']) . '">View Details</a>';
+                        echo '</div>';
                         echo '</div>';
                         // Inline JavaScript for carousel
                         echo '<script>';
@@ -185,7 +217,11 @@ if ($stmt) {
                         echo '</script>';
                     }
                 } else {
-                    echo '<p>No products found.</p>';
+                    $message = $category !== 'all' ? "No products found in the '$category' category. Try another category or add products." : 'No products found in the store.';
+                    if (!empty($search)) {
+                        $message .= " Try adjusting your search term or category.";
+                    }
+                    echo "<p>$message</p>";
                 }
                 if ($stmt) {
                     mysqli_stmt_close($stmt);
@@ -213,6 +249,7 @@ if ($stmt) {
                 const url = new URL(window.location.href);
                 url.searchParams.set('category', category);
                 url.searchParams.set('page', '1'); // Reset to page 1 on category change
+                url.searchParams.delete('search'); // Clear search on category change
                 window.location.href = url.toString();
             });
         });
