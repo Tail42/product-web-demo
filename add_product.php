@@ -28,14 +28,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
     $seller_id = $user_id;
     $description = trim($_POST['description'] ?? '');
     $in_stock = (int)($_POST['in_stock'] ?? 0);
-    $sold = (int)($_POST['sold'] ?? 0);
+    $sold = 0; // Set sold to 0 by default
     $price = (float)($_POST['price'] ?? 0);
     $create_at = date('Y-m-d H:i:s');
     $update_at = $create_at;
 
-    // Validate required fields
+    // Validate required fields and positive numbers
     if (empty($product_name) || empty($category) || empty($description) || empty($in_stock) || empty($price)) {
-        $error_message = 'All fields are required (except sold).';
+        $error_message = 'All fields are required.';
+    } elseif ($in_stock <= 0) {
+        $error_message = 'In Stock must be greater than 0.';
+    } elseif ($price <= 0) {
+        $error_message = 'Price must be greater than 0.';
     } else {
         // Handle multiple image uploads
         $image_paths = [];
@@ -81,7 +85,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
             $query = "INSERT INTO products (product_name, category, seller_id, description, in_stock, sold, price, create_at, update_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)";
             $stmt = mysqli_prepare($conn, $query);
             if ($stmt) {
-                mysqli_stmt_bind_param($stmt, "ssissiiss", $product_name, $category, $seller_id, $description, $in_stock, $sold, $price, $create_at, $update_at);
+                mysqli_stmt_bind_param($stmt, "ssissidss", $product_name, $category, $seller_id, $description, $in_stock, $sold, $price, $create_at, $update_at);
                 if (mysqli_stmt_execute($stmt)) {
                     $product_id = mysqli_insert_id($conn);
                     mysqli_stmt_close($stmt);
@@ -177,7 +181,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
                     </div>
                     <div class="form-group">
                         <label for="description">Description</label>
-                        <input type="text" id="description" name="description" placeholder="Description" required>
+                        <textarea id="description" name="description" placeholder="Enter product description" rows="5" required></textarea>
                     </div>
                     <div class="form-group">
                         <label for="product_images">Product Images (Select multiple)</label>
@@ -185,19 +189,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
                     </div>
                     <div class="form-group">
                         <label for="in_stock">In Stock</label>
-                        <input type="number" id="in_stock" name="in_stock" placeholder="In Stock" required>
-                    </div>
-                    <div class="form-group">
-                        <label for="sold">Sold</label>
-                        <input type="number" id="sold" name="sold" placeholder="Sold" value="0">
+                        <input type="number" id="in_stock" name="in_stock" placeholder="In Stock" min="1" required>
                     </div>
                     <div class="form-group">
                         <label for="price">Price</label>
-                        <input type="number" id="price" name="price" placeholder="Price" step="0.01" required>
+                        <input type="number" id="price" name="price" placeholder="Price" step="0.01" min="0.01" required>
                     </div>
                     <button type="submit" class="create-btn">Add Product</button>
                 </form>
-                <a href="user.php?section=my-product" class="back-btn">Back to My Products</a>
+                <a href="user.php?section=my-product" class="back-btn">Back to My Products :D</a>
             </div>
         </main>
     </div>

@@ -45,10 +45,12 @@ $limit = 8;
 $offset = ($page - 1) * $limit;
 
 // Build product query
-$query = "SELECT p.product_id, p.product_name, p.price, p.in_stock, 
+$query = "SELECT p.product_id, p.product_name, p.category, p.price, p.in_stock, p.sold, 
+                 COALESCE(u.user_name, 'Unknown') as seller_name,
                  COALESCE(GROUP_CONCAT(pi.image_path ORDER BY pi.image_id), 'images/product/default_product_img.png') as image_paths
           FROM products p
           LEFT JOIN product_images pi ON p.product_id = pi.product_id
+          LEFT JOIN users u ON p.seller_id = u.user_id
           WHERE 1=1";
 $params = [];
 $types = '';
@@ -67,7 +69,7 @@ if ($category !== 'all') {
     $types .= 's';
 }
 
-$query .= " GROUP BY p.product_id, p.product_name, p.price, p.in_stock";
+$query .= " GROUP BY p.product_id, p.product_name, p.category, p.price, p.in_stock, p.sold, u.user_name";
 
 // Debug: Log the query and parameters (remove in production)
 $debug = false; // Set to true to enable logging
@@ -78,7 +80,10 @@ if ($debug) {
 }
 
 // Count total products for pagination
-$count_query = "SELECT COUNT(*) as total FROM products p WHERE 1=1";
+$count_query = "SELECT COUNT(*) as total 
+                FROM products p
+                LEFT JOIN users u ON p.seller_id = u.user_id
+                WHERE 1=1";
 $count_params = [];
 $count_types = '';
 
@@ -191,8 +196,11 @@ if ($stmt) {
                         echo '</div>';
                         echo '<div class="product-info">';
                         echo '<h3>' . htmlspecialchars($row['product_name']) . '</h3>';
+                        echo '<p class="product-category">Category: ' . htmlspecialchars($row['category']) . '</p>';
                         echo '<p class="price">$' . htmlspecialchars(number_format($row['price'], 2)) . '</p>';
                         echo '<p class="stock">Stock: ' . htmlspecialchars($row['in_stock']) . '</p>';
+                        echo '<p class="product-sold">Sold: ' . htmlspecialchars($row['sold']) . '</p>';
+                        echo '<p class="product-seller">Seller: ' . htmlspecialchars($row['seller_name']) . '</p>';
                         echo '<a href="product.php?id=' . htmlspecialchars($row['product_id']) . '">View Details</a>';
                         echo '</div>';
                         echo '</div>';

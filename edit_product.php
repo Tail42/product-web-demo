@@ -59,14 +59,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
     $category = trim($_POST['category'] ?? '');
     $description = trim($_POST['description'] ?? '');
     $in_stock = (int)($_POST['in_stock'] ?? 0);
-    $sold = (int)($_POST['sold'] ?? 0);
     $price = (float)($_POST['price'] ?? 0);
     $update_at = date('Y-m-d H:i:s');
     $delete_images = isset($_POST['delete_images']) ? $_POST['delete_images'] : [];
 
-    // Validate required fields
+    // Validate required fields and positive numbers
     if (empty($product_name) || empty($category) || empty($description) || empty($in_stock) || empty($price)) {
-        $error_message = 'All fields are required (except sold).';
+        $error_message = 'All fields are required.';
+    } elseif ($in_stock <= 0) {
+        $error_message = 'In Stock must be greater than 0.';
+    } elseif ($price <= 0) {
+        $error_message = 'Price must be greater than 0.';
     } else {
         // Handle image deletions
         foreach ($delete_images as $image_id) {
@@ -127,48 +130,61 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
 
         // Update product
         if (empty($error_message)) {
-            $query = "UPDATE products SET product_name = ?, category = ?, description = ?, in_stock = ?, sold = ?, price = ?, update_at = ? WHERE product_id = ? AND seller_id = ?";
-            $stmt = mysqli_prepare($conn, $query);
-            mysqli_stmt_bind_param($stmt, "sssiissi", $product_name, $category, $description, $in_stock, $sold, $price, $update_at, $product_id, $user_id);
-            if (mysqli_stmt_execute($stmt)) {
-                // Insert new images
-                foreach ($image_paths as $image_path) {
-                    $query = "INSERT INTO product_images (product_id, image_path) VALUES (?, ?)";
-                    $stmt = mysqli_prepare($conn, $query);
-                    if ($stmt) {
-                        mysqli_stmt_bind_param($stmt, "is", $product_id, $image_path);
-                        mysqli_stmt_execute($stmt);
-                        mysqli_stmt_close($stmt);
-                    } else {
-                        $error_message = 'Failed to insert image path: ' . mysqli_error($conn);
-                        break;
+            $query = "UPDATE products SET product_name = ?, category = ?, description = ?, in_stock = ?, price = ?, update_at = ? WHERE product_id = ? AND seller_id = ?";
+            $update_stmt = mysqli_prepare($conn, $query);
+            if ($update_stmt) {
+                mysqli_stmt_bind_param($update_stmt, "sssidssi", $product_name, $category, $description, $in_stock, $price, $update_at, $product_id, $user_id);
+                if (mysqli_stmt_execute($update_stmt)) {
+                    // Insert new images
+                    foreach ($image_paths as $image_path) {
+                        $query = "INSERT INTO product_images (product_id, image_path) VALUES (?, ?)";
+                        $image_stmt = mysqli_prepare($conn, $query);
+                        if ($image_stmt) {
+                            mysqli_stmt_bind_param($image_stmt, "is", $product_id, $image_path);
+                            mysqli_stmt_execute($image_stmt);
+                            mysqli_stmt_close($image_stmt);
+                        } else {
+                            $error_message = 'Failed to insert image path: ' . mysqli_error($conn);
+                            break;
+                        }
                     }
-                }
-                $success_message = 'Product updated successfully!';
-                // Refresh product data
-                $query = "SELECT product_id, product_name, category, description, in_stock, sold, price FROM products WHERE product_id = ? AND seller_id = ?";
-                $stmt = mysqli_prepare($conn, $query);
-                mysqli_stmt_bind_param($stmt, "ii", $product_id, $user_id);
-                mysqli_stmt_execute($stmt);
-                $result = mysqli_stmt_get_result($stmt);
-                $product = mysqli_fetch_assoc($result);
-                // Refresh images
-                $images = [];
-                $query = "SELECT image_id, image_path FROM product_images WHERE product_id = ?";
-                $stmt = mysqli_prepare($conn, $query);
-                if ($stmt) {
-                    mysqli_stmt_bind_param($stmt, "i", $product_id);
-                    mysqli_stmt_execute($stmt);
-                    $result = mysqli_stmt_get_result($stmt);
-                    while ($row = mysqli_fetch_assoc($result)) {
-                        $images[] = $row;
+                    if (empty($error_message)) {
+                        $success_message = 'Product updated successfully!';
+                        // Refresh product data
+                        $query = "SELECT product_id, product_name, category, description, in_stock, sold, price FROM products WHERE product_id = ? AND seller_id = ?";
+                        $refresh_stmt = mysqli_prepare($conn, $query);
+                        if ($refresh_stmt) {
+                            mysqli_stmt_bind_param($refresh_stmt, "ii", $product_id, $user_id);
+                            mysqli_stmt_execute($refresh_stmt);
+                            $result = mysqli_stmt_get_result($refresh_stmt);
+                            $product = mysqli_fetch_assoc($result);
+                            mysqli_stmt_close($refresh_stmt);
+                        } else {
+                            $error_message = 'Failed to refresh product data: ' . mysqli_error($conn);
+                        }
+                        // Refresh images
+                        $images = [];
+                        $query = "SELECT image_id, image_path FROM product_images WHERE product_id = ?";
+                        $image_refresh_stmt = mysqli_prepare($conn, $query);
+                        if ($image_refresh_stmt) {
+                            mysqli_stmt_bind_param($image_refresh_stmt, "i", $product_id);
+                            mysqli_stmt_execute($image_refresh_stmt);
+                            $result = mysqli_stmt_get_result($image_refresh_stmt);
+                            while ($row = mysqli_fetch_assoc($result)) {
+                                $images[] = $row;
+                            }
+                            mysqli_stmt_close($image_refresh_stmt);
+                        } else {
+                            $error_message = 'Failed to refresh images: ' . mysqli_error($conn);
+                        }
                     }
-                    mysqli_stmt_close($stmt);
+                } else {
+                    $error_message = 'Product update failed: ' . mysqli_error($conn);
                 }
+                mysqli_stmt_close($update_stmt);
             } else {
-                $error_message = 'Product update failed: ' . mysqli_error($conn);
+                $error_message = 'Failed to prepare product update: ' . mysqli_error($conn);
             }
-            mysqli_stmt_close($stmt);
         }
     }
 }
@@ -238,7 +254,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
                     </div>
                     <div class="form-group">
                         <label for="description">Description</label>
-                        <input type="text" id="description" name="description" placeholder="Description" value="<?php echo htmlspecialchars($product['description'] ?? ''); ?>" required>
+                        <textarea id="description" name="description" placeholder="Enter product description" rows="5" required><?php echo htmlspecialchars($product['description'] ?? ''); ?></textarea>
                     </div>
                     <div class="form-group">
                         <label>Current Images</label>
@@ -264,15 +280,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
                     </div>
                     <div class="form-group">
                         <label for="in_stock">In Stock</label>
-                        <input type="number" id="in_stock" name="in_stock" placeholder="In Stock" value="<?php echo htmlspecialchars($product['in_stock'] ?? 0); ?>" required>
-                    </div>
-                    <div class="form-group">
-                        <label for="sold">Sold</label>
-                        <input type="number" id="sold" name="sold" placeholder="Sold" value="<?php echo htmlspecialchars($product['sold'] ?? 0); ?>">
+                        <input type="number" id="in_stock" name="in_stock" placeholder="In Stock" min="1" value="<?php echo htmlspecialchars($product['in_stock'] ?? 0); ?>" required>
                     </div>
                     <div class="form-group">
                         <label for="price">Price</label>
-                        <input type="number" id="price" name="price" placeholder="Price" step="0.01" value="<?php echo htmlspecialchars($product['price'] ?? 0); ?>" required>
+                        <input type="number" id="price" name="price" placeholder="Price" step="0.01" min="0.01" value="<?php echo htmlspecialchars($product['price'] ?? 0); ?>" required>
                     </div>
                     <button type="submit" class="create-btn">Update Product</button>
                 </form>

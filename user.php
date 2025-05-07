@@ -145,6 +145,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                     }
                                     mysqli_stmt_close($stmt);
 
+                                    // Update sold
+                                    $query = "UPDATE products SET sold = sold + ? WHERE product_id = ?";
+                                    $stmt = mysqli_prepare($conn, $query);
+                                    mysqli_stmt_bind_param($stmt, "ii", $quantity, $product_id);
+                                    if (!mysqli_stmt_execute($stmt)) {
+                                        throw new Exception('Failed to update product sold: ' . mysqli_error($conn));
+                                    }
+                                    mysqli_stmt_close($stmt);
+
                                     // Check if in_stock is 0
                                     $query = "SELECT in_stock FROM products WHERE product_id = ?";
                                     $stmt = mysqli_prepare($conn, $query);
@@ -495,7 +504,7 @@ if ($active_section === 'my-product') {
                             <label for="new_password">New Password</label>
                             <input type="password" id="new_password" name="new_password" placeholder="Enter your new password" required>
                             <button type="button" class="toggle-password" data-target="new_password">
-                                <img src="images/eye-open.png" alt="Toggle Password" class="password-toggle-img">
+                                <img src="images/eye-close.png" alt="Toggle Password" class="password-toggle-img">
                             </button>
                         </div>
                         <div class="form-group password-group">
@@ -620,88 +629,47 @@ if ($active_section === 'my-product') {
 
             <?php elseif ($active_section === 'my-product'): ?>
                 <h2>My Product</h2>
-                <div class="form-section">
+                <div class="form-section my-product">
                     <a href="add_product.php" class="create-btn">Add Product</a>
-                    <?php if (empty($products)): ?>
-                        <p>You haven't uploaded any products yet.</p>
-                    <?php else: ?>
-                        <p class="product-count">
-                            Showing <?php echo ($offset + 1); ?>-<?php echo min($offset + $limit, $total_products); ?> of <?php echo $total_products; ?> products
-                        </p>
-                        <div class="product-grid">
+                    <div class="product-grid">
+                        <?php if (empty($products)): ?>
+                            <p>No products available.</p>
+                        <?php else: ?>
                             <?php foreach ($products as $product): ?>
                                 <div class="product-card">
                                     <div class="photo-display">
-                                        <?php
-                                        if ($product['in_stock'] < 5 && $product['in_stock'] > 0) {
-                                            echo '<span class="stock-badge">Low Stock</span>';
-                                        } elseif ($product['in_stock'] == 0) {
-                                            echo '<span class="stock-badge">Out of Stock</span>';
-                                        }
-                                        ?>
-                                        <button class="carousel-prev" data-product-id="<?php echo $product['product_id']; ?>"><</button>
-                                        <img src="<?php echo htmlspecialchars($product['images'][0]); ?>" alt="Product Image" class="carousel-image" data-product-id="<?php echo $product['product_id']; ?>">
-                                        <button class="carousel-next" data-product-id="<?php echo $product['product_id']; ?>">></button>
-                                        <script>
-                                            const images<?php echo $product['product_id']; ?> = <?php echo json_encode($product['images']); ?>;
-                                            let currentIndex<?php echo $product['product_id']; ?> = 0;
-                                            const imgElement<?php echo $product['product_id']; ?> = document.querySelector('.carousel-image[data-product-id="<?php echo $product['product_id']; ?>"]');
-                                            const prevButton<?php echo $product['product_id']; ?> = document.querySelector('.carousel-prev[data-product-id="<?php echo $product['product_id']; ?>"]');
-                                            const nextButton<?php echo $product['product_id']; ?> = document.querySelector('.carousel-next[data-product-id="<?php echo $product['product_id']; ?>"]');
-
-                                            function updateImage<?php echo $product['product_id']; ?>() {
-                                                imgElement<?php echo $product['product_id']; ?>.src = images<?php echo $product['product_id']; ?>[currentIndex<?php echo $product['product_id']; ?>];
-                                            }
-
-                                            prevButton<?php echo $product['product_id']; ?>.addEventListener('click', () => {
-                                                currentIndex<?php echo $product['product_id']; ?> = (currentIndex<?php echo $product['product_id']; ?> - 1 + images<?php echo $product['product_id']; ?>.length) % images<?php echo $product['product_id']; ?>.length;
-                                                updateImage<?php echo $product['product_id']; ?>();
-                                            });
-
-                                            nextButton<?php echo $product['product_id']; ?>.addEventListener('click', () => {
-                                                currentIndex<?php echo $product['product_id']; ?> = (currentIndex<?php echo $product['product_id']; ?> + 1) % images<?php echo $product['product_id']; ?>.length;
-                                                updateImage<?php echo $product['product_id']; ?>();
-                                            });
-                                        </script>
+                                        <img src="<?php echo htmlspecialchars($product['images'][0]); ?>" alt="<?php echo htmlspecialchars($product['product_name']); ?>">
+                                        <?php if ($product['in_stock'] <= 0): ?>
+                                            <span class="stock-badge">Out of Stock</span>
+                                        <?php endif; ?>
                                     </div>
                                     <div class="product-info">
-                                        <h3><?php echo htmlspecialchars($product['product_name'] ?? 'No Name'); ?></h3>
-                                        <p><strong>Category:</strong> <?php echo htmlspecialchars($product['category'] ?? 'N/A'); ?></p>
-                                        <p class="description"><strong>Description:</strong> <?php echo htmlspecialchars(substr($product['description'] ?? 'N/A', 0, 50)) . (strlen($product['description'] ?? '') > 50 ? '...' : ''); ?></p>
-                                        <p class="stock"><strong>In Stock:</strong> <?php echo htmlspecialchars($product['in_stock'] ?? 0); ?></p>
-                                        <p><strong>Sold:</strong> <?php echo htmlspecialchars($product['sold'] ?? 0); ?></p>
-                                        <p class="price"><strong>Price:</strong> $<?php echo htmlspecialchars(number_format($product['price'], 2) ?? '0.00'); ?></p>
+                                        <h3><?php echo htmlspecialchars($product['product_name']); ?></h3>
+                                        <p class="category"><?php echo htmlspecialchars($product['category']); ?></p>
+                                        <p class="description"><?php echo htmlspecialchars($product['description']); ?></p>
+                                        <p class="price">$<?php echo number_format($product['price'], 2); ?></p>
+                                        <p class="stock">Stock: <?php echo htmlspecialchars($product['in_stock']); ?></p>
                                         <div class="product-actions">
-                                            <a href="edit_product.php?product_id=<?php echo htmlspecialchars($product['product_id']); ?>" class="edit-btn">Edit Product</a>
-                                            <form method="POST" action="" onsubmit="return confirm('Are you sure you want to delete this product?');">
+                                            <a href="edit_product.php?product_id=<?php echo htmlspecialchars($product['product_id']); ?>" class="edit-btn">Edit</a>
+                                            <form method="POST" action="">
                                                 <input type="hidden" name="action" value="delete_product">
-                                                <input type="hidden" name="product_id" value="<?php echo htmlspecialchars($product['product_id']); ?>">
-                                                <button type="submit" class="delete-btn">Delete Product</button>
+                                                <input type="hidden" name="product_id" value="<?php echo $product['product_id']; ?>">
+                                                <button type="submit" class="delete-btn" onclick="return confirm('Are you sure you want to delete this product?');">Delete</button>
                                             </form>
                                         </div>
                                     </div>
                                 </div>
                             <?php endforeach; ?>
-                        </div>
+                        <?php endif; ?>
+                    </div>
+                    <?php if ($total_products > 0): ?>
+                        <p class="product-count">Showing <?php echo count($products); ?> of <?php echo $total_products; ?> products</p>
                         <div class="pagination">
-                            <?php
-                            $prev_page = $page > 1 ? $page - 1 : 1;
-                            $next_page = $page < $total_pages ? $page + 1 : $total_pages;
-                            ?>
-                            <a href="?section=my-product&page=<?php echo $prev_page; ?>" class="page-btn <?php echo $page <= 1 ? 'disabled' : ''; ?>">Previous</a>
+                            <a href="?section=my-product&page=<?php echo max(1, $page - 1); ?>" class="page-btn <?php echo $page <= 1 ? 'disabled' : ''; ?>">Previous</a>
                             <span>Page <?php echo $page; ?> of <?php echo $total_pages; ?></span>
-                            <a href="?section=my-product&page=<?php echo $next_page; ?>" class="page-btn <?php echo $page >= $total_pages ? 'disabled' : ''; ?>">Next</a>
+                            <a href="?section=my-product&page=<?php echo min($total_pages, $page + 1); ?>" class="page-btn <?php echo $page >= $total_pages ? 'disabled' : ''; ?>">Next</a>
                         </div>
                     <?php endif; ?>
-                </div>
-
-            <?php elseif ($active_section === 'logout'): ?>
-                <h2>Log Out</h2>
-                <div class="form-section">
-                    <form method="POST" action="">
-                        <input type="hidden" name="action" value="logout">
-                        <button type="submit" class="create-btn">Confirm Log Out</button>
-                    </form>
                 </div>
 
             <?php elseif ($active_section === 'delete-account'): ?>
@@ -710,10 +678,10 @@ if ($active_section === 'my-product') {
                     <form method="POST" action="">
                         <input type="hidden" name="action" value="delete_account">
                         <div class="form-group">
-                            <label for="confirm_account">Confirm Account Name</label>
-                            <input type="text" id="confirm_account" name="confirm_account" placeholder="Confirm Account Name" required>
+                            <label for="confirm_account">Confirm Account Email</label>
+                            <input type="text" id="confirm_account" name="confirm_account" placeholder="Enter your account email" required>
                         </div>
-                        <button type="submit" class="create-btn">Delete Account</button>
+                        <button type="submit" class="create-btn" onclick="return confirm('Are you sure you want to delete your account? This action cannot be undone.');">Delete Account</button>
                     </form>
                 </div>
             <?php endif; ?>
@@ -724,29 +692,25 @@ if ($active_section === 'my-product') {
                 <li><a href="?section=change-password" class="<?php echo $active_section === 'change-password' ? 'active' : ''; ?>">Change Password</a></li>
                 <li><a href="?section=my-purchase" class="<?php echo $active_section === 'my-purchase' ? 'active' : ''; ?>">My Purchase</a></li>
                 <li><a href="?section=my-product" class="<?php echo $active_section === 'my-product' ? 'active' : ''; ?>">My Product</a></li>
-                <li><a href="?section=logout" class="<?php echo $active_section === 'logout' ? 'active' : ''; ?>" onclick="document.querySelector('form[action=\"\"]').submit(); return false;">Log Out</a></li>
                 <li><a href="?section=delete-account" class="<?php echo $active_section === 'delete-account' ? 'active' : ''; ?>">Delete Account</a></li>
             </ul>
-            <form method="POST" action="" style="display: none;">
-                <input type="hidden" name="action" value="logout">
-            </form>
         </aside>
     </div>
     <footer>
-        <p>© 2025 E-Shop System</p>
+        <p>© <?php echo date('Y'); ?> E-Shop System. All rights reserved.</p>
     </footer>
     <script>
-        // Show/hide password functionality
+        // Password toggle functionality
         document.querySelectorAll('.toggle-password').forEach(button => {
-            button.addEventListener('click', function(e) {
-                e.preventDefault();
-                const targetInput = document.querySelector(`input[name="${this.getAttribute('data-target')}"]`);
-                const img = this.querySelector('img');
-                if (targetInput.type === 'password') {
-                    targetInput.type = 'text';
+            button.addEventListener('click', () => {
+                const targetId = button.getAttribute('data-target');
+                const input = document.getElementById(targetId);
+                const img = button.querySelector('.password-toggle-img');
+                if (input.type === 'password') {
+                    input.type = 'text';
                     img.src = 'images/eye-open.png';
                 } else {
-                    targetInput.type = 'password';
+                    input.type = 'password';
                     img.src = 'images/eye-close.png';
                 }
             });
@@ -754,14 +718,17 @@ if ($active_section === 'my-product') {
 
         // Tab switching for My Purchase
         document.querySelectorAll('.tab-btn').forEach(button => {
-            button.addEventListener('click', function() {
-                document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
-                document.querySelectorAll('.tab-content').forEach(content => content.style.display = 'none');
-                this.classList.add('active');
-                document.getElementById(this.getAttribute('data-tab')).style.display = 'block';
+            button.addEventListener('click', () => {
+                const tab = button.getAttribute('data-tab');
+                document.querySelectorAll('.tab-content').forEach(content => {
+                    content.style.display = content.id === tab ? 'block' : 'none';
+                });
+                document.querySelectorAll('.tab-btn').forEach(btn => {
+                    btn.classList.toggle('active', btn.getAttribute('data-tab') === tab);
+                });
             });
         });
     </script>
-    <?php mysqli_close($conn); ?>
 </body>
 </html>
+<?php mysqli_close($conn); ?>
