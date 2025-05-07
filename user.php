@@ -9,6 +9,9 @@ if (!isset($_SESSION['user_id'])) {
 
 $user_id = $_SESSION['user_id'];
 
+// Set timezone to UTC+8
+date_default_timezone_set('Asia/Taipei');
+
 // Query user info
 $query = "SELECT user_name, account, fullname, address, phone, user_picture FROM users WHERE user_id = ? LIMIT 1";
 $stmt = mysqli_prepare($conn, $query);
@@ -62,7 +65,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             case 'delete_product':
                 $product_id = (int)($_POST['product_id'] ?? 0);
                 if ($product_id > 0) {
-                    // Verify the product belongs to the user
                     $query = "SELECT COUNT(*) as count FROM products WHERE product_id = ? AND seller_id = ?";
                     $stmt = mysqli_prepare($conn, $query);
                     mysqli_stmt_bind_param($stmt, "ii", $product_id, $user_id);
@@ -70,7 +72,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $result = mysqli_stmt_get_result($stmt);
                     $row = mysqli_fetch_assoc($result);
                     if ($row['count'] > 0) {
-                        // Delete associated images
                         $query = "SELECT image_path FROM product_images WHERE product_id = ?";
                         $stmt = mysqli_prepare($conn, $query);
                         if ($stmt) {
@@ -85,7 +86,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             mysqli_stmt_close($stmt);
                         }
 
-                        // Delete the product (ON DELETE CASCADE handles product_images)
                         $query = "DELETE FROM products WHERE product_id = ? AND seller_id = ?";
                         $stmt = mysqli_prepare($conn, $query);
                         mysqli_stmt_bind_param($stmt, "ii", $product_id, $user_id);
@@ -100,6 +100,117 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     mysqli_stmt_close($stmt);
                 } else {
                     $error_message = 'Invalid product ID.';
+                }
+                break;
+
+            case 'ship_order':
+                $order_id = (int)($_POST['order_id'] ?? 0);
+                if ($order_id > 0) {
+                    $query = "UPDATE orders SET status = 'shipped' WHERE order_id = ? AND seller_id = ? AND status = 'pending'";
+                    $stmt = mysqli_prepare($conn, $query);
+                    mysqli_stmt_bind_param($stmt, "ii", $order_id, $user_id);
+                    if (mysqli_stmt_execute($stmt) && mysqli_stmt_affected_rows($stmt) > 0) {
+                        $success_message = 'Order marked as shipped!';
+                    } else {
+                        $error_message = 'Failed to mark order as shipped.';
+                    }
+                    mysqli_stmt_close($stmt);
+                }
+                break;
+
+            case 'complete_order':
+                $order_id = (int)($_POST['order_id'] ?? 0);
+                if ($order_id > 0) {
+                    // Start transaction
+                    mysqli_begin_transaction($conn);
+                    try {
+                        // Get order products
+                        $query = "SELECT order_products FROM orders WHERE order_id = ? AND buyer_id = ? AND status = 'shipped'";
+                        $stmt = mysqli_prepare($conn, $query);
+                        mysqli_stmt_bind_param($stmt, "ii", $order_id, $user_id);
+                        mysqli_stmt_execute($stmt);
+                        $result = mysqli_stmt_get_result($stmt);
+                        if ($row = mysqli_fetch_assoc($result)) {
+                            $products = json_decode($row['order_products'], true) ?: [];
+                            foreach ($products as $item) {
+                                $product_id = (int)($item['product_id'] ?? 0);
+                                $quantity = (int)($item['quantity'] ?? 0);
+                                if ($product_id > 0 && $quantity > 0) {
+                                    // Update in_stock
+                                    $query = "UPDATE products SET in_stock = in_stock - ? WHERE product_id = ?";
+                                    $stmt = mysqli_prepare($conn, $query);
+                                    mysqli_stmt_bind_param($stmt, "ii", $quantity, $product_id);
+                                    if (!mysqli_stmt_execute($stmt)) {
+                                        throw new Exception('Failed to update product stock: ' . mysqli_error($conn));
+                                    }
+                                    mysqli_stmt_close($stmt);
+
+                                    // Check if in_stock is 0
+                                    $query = "SELECT in_stock FROM products WHERE product_id = ?";
+                                    $stmt = mysqli_prepare($conn, $query);
+                                    mysqli_stmt_bind_param($stmt, "i", $product_id);
+                                    mysqli_stmt_execute($stmt);
+                                    $result_stock = mysqli_stmt_get_result($stmt);
+                                    $stock_row = mysqli_fetch_assoc($result_stock);
+                                    mysqli_stmt_close($stmt);
+
+                                    if ($stock_row['in_stock'] <= 0) {
+                                        // Delete product images
+                                        $query = "SELECT image_path FROM product_images WHERE product_id = ?";
+                                        $stmt = mysqli_prepare($conn, $query);
+                                        mysqli_stmt_bind_param($stmt, "i", $product_id);
+                                        mysqli_stmt_execute($stmt);
+                                        $result_images = mysqli_stmt_get_result($stmt);
+                                        while ($image = mysqli_fetch_assoc($result_images)) {
+                                            if ($image['image_path'] !== 'images/product/default_product_img.png') {
+                                                @unlink(__DIR__ . '/' . $image['image_path']);
+                                            }
+                                        }
+                                        mysqli_stmt_close($stmt);
+
+                                        // Delete product_images records
+                                        $query = "DELETE FROM product_images WHERE product_id = ?";
+                                        $stmt = mysqli_prepare($conn, $query);
+                                        mysqli_stmt_bind_param($stmt, "i", $product_id);
+                                        if (!mysqli_stmt_execute($stmt)) {
+                                            throw new Exception('Failed to delete product images: ' . mysqli_error($conn));
+                                        }
+                                        mysqli_stmt_close($stmt);
+
+                                        // Delete product
+                                        $query = "DELETE FROM products WHERE product_id = ?";
+                                        $stmt = mysqli_prepare($conn, $query);
+                                        mysqli_stmt_bind_param($stmt, "i", $product_id);
+                                        if (!mysqli_stmt_execute($stmt)) {
+                                            throw new Exception('Failed to delete product: ' . mysqli_error($conn));
+                                        }
+                                        mysqli_stmt_close($stmt);
+                                    }
+                                }
+                            }
+
+                            // Update order status
+                            $query = "UPDATE orders SET status = 'completed', completed_at = NOW() WHERE order_id = ? AND buyer_id = ? AND status = 'shipped'";
+                            $stmt = mysqli_prepare($conn, $query);
+                            mysqli_stmt_bind_param($stmt, "ii", $order_id, $user_id);
+                            if (!mysqli_stmt_execute($stmt) || mysqli_stmt_affected_rows($stmt) == 0) {
+                                throw new Exception('Failed to complete order.');
+                            }
+                            mysqli_stmt_close($stmt);
+
+                            // Commit transaction
+                            mysqli_commit($conn);
+                            $success_message = 'Order completed successfully!';
+                        } else {
+                            throw new Exception('Order not found or not eligible for completion.');
+                        }
+                    } catch (Exception $e) {
+                        // Rollback transaction
+                        mysqli_rollback($conn);
+                        $error_message = $e->getMessage();
+                    }
+                } else {
+                    $error_message = 'Invalid order ID.';
                 }
                 break;
 
@@ -131,15 +242,153 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 }
 
-// Query user's products and images (only for my-product section)
+// Query orders for My Purchase
+$my_purchased_orders = [];
+$my_sold_items = [];
+$history_orders = [];
+if ($active_section === 'my-purchase') {
+    // My Purchased Orders (buyer, incomplete: pending or shipped)
+    $query = "SELECT o.order_id, o.seller_id, o.pay_method, o.checkout_at, o.status, o.order_products,
+                     COALESCE(u.user_name, u.fullname, 'Unknown') as seller_name
+              FROM orders o
+              JOIN users u ON o.seller_id = u.user_id
+              WHERE o.buyer_id = ? AND o.status IN ('pending', 'shipped')";
+    $stmt = mysqli_prepare($conn, $query);
+    mysqli_stmt_bind_param($stmt, "i", $user_id);
+    mysqli_stmt_execute($stmt);
+    $result = mysqli_stmt_get_result($stmt);
+    while ($row = mysqli_fetch_assoc($result)) {
+        $order = $row;
+        $order['items'] = [];
+        $products = json_decode($row['order_products'], true) ?: [];
+        foreach ($products as $item) {
+            $product_id = (int)($item['product_id'] ?? 0);
+            $quantity = (int)($item['quantity'] ?? 0);
+            if ($product_id > 0 && $quantity > 0) {
+                $item_query = "SELECT p.product_name,
+                               COALESCE(pi.image_path, 'images/product/default_product_img.png') as image_path
+                               FROM products p
+                               LEFT JOIN product_images pi ON p.product_id = pi.product_id AND pi.image_id = (
+                                   SELECT MIN(image_id) FROM product_images WHERE product_id = p.product_id
+                               )
+                               WHERE p.product_id = ?";
+                $item_stmt = mysqli_prepare($conn, $item_query);
+                mysqli_stmt_bind_param($item_stmt, "i", $product_id);
+                mysqli_stmt_execute($item_stmt);
+                $item_result = mysqli_stmt_get_result($item_stmt);
+                if ($item_row = mysqli_fetch_assoc($item_result)) {
+                    $order['items'][] = [
+                        'product_id' => $product_id,
+                        'product_name' => $item_row['product_name'],
+                        'image_path' => $item_row['image_path'],
+                        'quantity' => $quantity
+                    ];
+                }
+                mysqli_stmt_close($item_stmt);
+            }
+        }
+        $my_purchased_orders[] = $order;
+    }
+    mysqli_stmt_close($stmt);
+
+    // My Sold Items (seller, incomplete: pending or shipped)
+    $query = "SELECT o.order_id, o.buyer_id, o.pay_method, o.checkout_at, o.status, o.order_products,
+                     COALESCE(u.user_name, u.fullname, 'Unknown') as buyer_name
+              FROM orders o
+              JOIN users u ON o.buyer_id = u.user_id
+              WHERE o.seller_id = ? AND o.status IN ('pending', 'shipped')";
+    $stmt = mysqli_prepare($conn, $query);
+    mysqli_stmt_bind_param($stmt, "i", $user_id);
+    mysqli_stmt_execute($stmt);
+    $result = mysqli_stmt_get_result($stmt);
+    while ($row = mysqli_fetch_assoc($result)) {
+        $order = $row;
+        $order['items'] = [];
+        $products = json_decode($row['order_products'], true) ?: [];
+        foreach ($products as $item) {
+            $product_id = (int)($item['product_id'] ?? 0);
+            $quantity = (int)($item['quantity'] ?? 0);
+            if ($product_id > 0 && $quantity > 0) {
+                $item_query = "SELECT p.product_name,
+                               COALESCE(pi.image_path, 'images/product/default_product_img.png') as image_path
+                               FROM products p
+                               LEFT JOIN product_images pi ON p.product_id = pi.product_id AND pi.image_id = (
+                                   SELECT MIN(image_id) FROM product_images WHERE product_id = p.product_id
+                               )
+                               WHERE p.product_id = ?";
+                $item_stmt = mysqli_prepare($conn, $item_query);
+                mysqli_stmt_bind_param($item_stmt, "i", $product_id);
+                mysqli_stmt_execute($item_stmt);
+                $item_result = mysqli_stmt_get_result($item_stmt);
+                if ($item_row = mysqli_fetch_assoc($item_result)) {
+                    $order['items'][] = [
+                        'product_id' => $product_id,
+                        'product_name' => $item_row['product_name'],
+                        'image_path' => $item_row['image_path'],
+                        'quantity' => $quantity
+                    ];
+                }
+                mysqli_stmt_close($item_stmt);
+            }
+        }
+        $my_sold_items[] = $order;
+    }
+    mysqli_stmt_close($stmt);
+
+    // History Orders (completed, buyer or seller)
+    $query = "SELECT o.order_id, o.buyer_id, o.seller_id, o.pay_method, o.checkout_at, o.completed_at, o.status, o.order_products,
+                     COALESCE(ub.user_name, ub.fullname, 'Unknown') as buyer_name,
+                     COALESCE(us.user_name, us.fullname, 'Unknown') as seller_name
+              FROM orders o
+              JOIN users ub ON o.buyer_id = ub.user_id
+              JOIN users us ON o.seller_id = us.user_id
+              WHERE (o.buyer_id = ? OR o.seller_id = ?) AND o.status = 'completed'";
+    $stmt = mysqli_prepare($conn, $query);
+    mysqli_stmt_bind_param($stmt, "ii", $user_id, $user_id);
+    mysqli_stmt_execute($stmt);
+    $result = mysqli_stmt_get_result($stmt);
+    while ($row = mysqli_fetch_assoc($result)) {
+        $order = $row;
+        $order['items'] = [];
+        $products = json_decode($row['order_products'], true) ?: [];
+        foreach ($products as $item) {
+            $product_id = (int)($item['product_id'] ?? 0);
+            $quantity = (int)($item['quantity'] ?? 0);
+            if ($product_id > 0 && $quantity > 0) {
+                $item_query = "SELECT p.product_name,
+                               COALESCE(pi.image_path, 'images/product/default_product_img.png') as image_path
+                               FROM products p
+                               LEFT JOIN product_images pi ON p.product_id = pi.product_id AND pi.image_id = (
+                                   SELECT MIN(image_id) FROM product_images WHERE product_id = p.product_id
+                               )
+                               WHERE p.product_id = ?";
+                $item_stmt = mysqli_prepare($conn, $item_query);
+                mysqli_stmt_bind_param($item_stmt, "i", $product_id);
+                mysqli_stmt_execute($item_stmt);
+                $item_result = mysqli_stmt_get_result($item_stmt);
+                if ($item_row = mysqli_fetch_assoc($item_result)) {
+                    $order['items'][] = [
+                        'product_id' => $product_id,
+                        'product_name' => $item_row['product_name'],
+                        'image_path' => $item_row['image_path'],
+                        'quantity' => $quantity
+                    ];
+                }
+                mysqli_stmt_close($item_stmt);
+            }
+        }
+        $history_orders[] = $order;
+    }
+    mysqli_stmt_close($stmt);
+}
+
+// Query user's products (my-product section)
 $products = [];
 if ($active_section === 'my-product') {
-    // Pagination parameters
     $page = isset($_GET['page']) && is_numeric($_GET['page']) && $_GET['page'] > 0 ? (int)$_GET['page'] : 1;
-    $limit = 2; // Changed to 2 products per page
+    $limit = 2;
     $offset = ($page - 1) * $limit;
 
-    // Count total products
     $count_query = "SELECT COUNT(*) as total FROM products WHERE seller_id = ?";
     $stmt = mysqli_prepare($conn, $count_query);
     mysqli_stmt_bind_param($stmt, "i", $user_id);
@@ -150,7 +399,6 @@ if ($active_section === 'my-product') {
 
     $total_pages = ceil($total_products / $limit);
 
-    // Fetch paginated products
     $query = "SELECT product_id, product_name, category, description, in_stock, sold, price 
               FROM products 
               WHERE seller_id = ? 
@@ -161,8 +409,7 @@ if ($active_section === 'my-product') {
     $result = mysqli_stmt_get_result($stmt);
     while ($row = mysqli_fetch_assoc($result)) {
         $product = $row;
-        // Fetch images for this product
-        $product['images'] = ['images/product/default_product_img.png']; // Default image
+        $product['images'] = ['images/product/default_product_img.png'];
         $query_images = "SELECT image_path FROM product_images WHERE product_id = ?";
         $stmt_images = mysqli_prepare($conn, $query_images);
         if ($stmt_images) {
@@ -174,7 +421,7 @@ if ($active_section === 'my-product') {
                 $images[] = $image_row['image_path'];
             }
             if (!empty($images)) {
-                $product['images'] = $images; // Override default if images exist
+                $product['images'] = $images;
             }
             mysqli_stmt_close($stmt_images);
         }
@@ -215,7 +462,7 @@ if ($active_section === 'my-product') {
                 <p class="success"><?php echo htmlspecialchars($success_message); ?></p>
             <?php endif; ?>
             <?php if ($error_message): ?>
-                <p class="error"><?php echo htmlspecialchars($error_message); ?></p>
+                <p class="error-message"><?php echo htmlspecialchars($error_message); ?></p>
             <?php endif; ?>
 
             <?php if ($active_section === 'my-account'): ?>
@@ -248,7 +495,7 @@ if ($active_section === 'my-product') {
                             <label for="new_password">New Password</label>
                             <input type="password" id="new_password" name="new_password" placeholder="Enter your new password" required>
                             <button type="button" class="toggle-password" data-target="new_password">
-                                <img src="images/eye-close.png" alt="Toggle Password" class="password-toggle-img">
+                                <img src="images/eye-open.png" alt="Toggle Password" class="password-toggle-img">
                             </button>
                         </div>
                         <div class="form-group password-group">
@@ -260,6 +507,115 @@ if ($active_section === 'my-product') {
                         </div>
                         <button type="submit" class="create-btn">Change Password</button>
                     </form>
+                </div>
+
+            <?php elseif ($active_section === 'my-purchase'): ?>
+                <h2>My Purchase</h2>
+                <div class="form-section">
+                    <div class="order-tabs">
+                        <button class="tab-btn active" data-tab="purchased">My Purchased Orders</button>
+                        <button class="tab-btn" data-tab="sold">My Sold Items</button>
+                        <button class="tab-btn" data-tab="history">History Order</button>
+                    </div>
+                    <div class="tab-content" id="purchased">
+                        <h3>My Purchased Orders</h3>
+                        <?php if (empty($my_purchased_orders)): ?>
+                            <p>No purchased orders.</p>
+                        <?php else: ?>
+                            <?php foreach ($my_purchased_orders as $order): ?>
+                                <div class="order-card">
+                                    <p><strong>Seller:</strong> <?php echo htmlspecialchars($order['seller_name']); ?></p>
+                                    <p><strong>Payment Method:</strong> <?php echo htmlspecialchars(ucwords(str_replace('_', ' ', $order['pay_method']))); ?></p>
+                                    <p><strong>Checkout Time:</strong> <?php echo htmlspecialchars(date('Y-m-d H:i:s', strtotime($order['checkout_at']))); ?></p>
+                                    <div class="order-items">
+                                        <?php foreach ($order['items'] as $item): ?>
+                                            <div class="order-item">
+                                                <img src="<?php echo htmlspecialchars($item['image_path']); ?>" alt="<?php echo htmlspecialchars($item['product_name']); ?>" class="order-item-image">
+                                                <div class="order-item-details">
+                                                    <p><strong><?php echo htmlspecialchars($item['product_name']); ?></strong></p>
+                                                    <p>Quantity: <?php echo htmlspecialchars($item['quantity']); ?></p>
+                                                </div>
+                                            </div>
+                                        <?php endforeach; ?>
+                                    </div>
+                                    <p><strong>Status:</strong> 
+                                        <?php echo $order['status'] === 'pending' ? 'Waiting for seller to ship' : 'Order shipped, ready to complete'; ?>
+                                    </p>
+                                    <form method="POST" action="">
+                                        <input type="hidden" name="action" value="complete_order">
+                                        <input type="hidden" name="order_id" value="<?php echo $order['order_id']; ?>">
+                                        <button type="submit" class="action-btn complete-order-btn" 
+                                                <?php echo $order['status'] === 'pending' ? 'disabled' : ''; ?>>
+                                            Complete Order
+                                        </button>
+                                    </form>
+                                </div>
+                            <?php endforeach; ?>
+                        <?php endif; ?>
+                    </div>
+                    <div class="tab-content" id="sold" style="display: none;">
+                        <h3>My Sold Items</h3>
+                        <?php if (empty($my_sold_items)): ?>
+                            <p>No sold items.</p>
+                        <?php else: ?>
+                            <?php foreach ($my_sold_items as $order): ?>
+                                <div class="order-card">
+                                    <p><strong>Buyer:</strong> <?php echo htmlspecialchars($order['buyer_name']); ?></p>
+                                    <p><strong>Payment Method:</strong> <?php echo htmlspecialchars(ucwords(str_replace('_', ' ', $order['pay_method']))); ?></p>
+                                    <p><strong>Checkout Time:</strong> <?php echo htmlspecialchars(date('Y-m-d H:i:s', strtotime($order['checkout_at']))); ?></p>
+                                    <div class="order-items">
+                                        <?php foreach ($order['items'] as $item): ?>
+                                            <div class="order-item">
+                                                <img src="<?php echo htmlspecialchars($item['image_path']); ?>" alt="<?php echo htmlspecialchars($item['product_name']); ?>" class="order-item-image">
+                                                <div class="order-item-details">
+                                                    <p><strong><?php echo htmlspecialchars($item['product_name']); ?></strong></p>
+                                                    <p>Quantity: <?php echo htmlspecialchars($item['quantity']); ?></p>
+                                                </div>
+                                            </div>
+                                        <?php endforeach; ?>
+                                    </div>
+                                    <p><strong>Status:</strong> 
+                                        <?php echo $order['status'] === 'pending' ? 'Ready to ship' : 'Order shipped'; ?>
+                                    </p>
+                                    <form method="POST" action="">
+                                        <input type="hidden" name="action" value="ship_order">
+                                        <input type="hidden" name="order_id" value="<?php echo $order['order_id']; ?>">
+                                        <button type="submit" class="action-btn ship-order-btn" 
+                                                <?php echo $order['status'] === 'shipped' ? 'disabled' : ''; ?>>
+                                            Shipped Order
+                                        </button>
+                                    </form>
+                                </div>
+                            <?php endforeach; ?>
+                        <?php endif; ?>
+                    </div>
+                    <div class="tab-content" id="history" style="display: none;">
+                        <h3>History Order</h3>
+                        <?php if (empty($history_orders)): ?>
+                            <p>No completed orders.</p>
+                        <?php else: ?>
+                            <?php foreach ($history_orders as $order): ?>
+                                <div class="order-card">
+                                    <p><strong>Buyer:</strong> <?php echo htmlspecialchars($order['buyer_name']); ?></p>
+                                    <p><strong>Seller:</strong> <?php echo htmlspecialchars($order['seller_name']); ?></p>
+                                    <p><strong>Payment Method:</strong> <?php echo htmlspecialchars(ucwords(str_replace('_', ' ', $order['pay_method']))); ?></p>
+                                    <p><strong>Checkout Time:</strong> <?php echo htmlspecialchars(date('Y-m-d H:i:s', strtotime($order['checkout_at']))); ?></p>
+                                    <p><strong>Completion Time:</strong> <?php echo htmlspecialchars(date('Y-m-d H:i:s', strtotime($order['completed_at']))); ?></p>
+                                    <div class="order-items">
+                                        <?php foreach ($order['items'] as $item): ?>
+                                            <div class="order-item">
+                                                <img src="<?php echo htmlspecialchars($item['image_path']); ?>" alt="<?php echo htmlspecialchars($item['product_name']); ?>" class="order-item-image">
+                                                <div class="order-item-details">
+                                                    <p><strong><?php echo htmlspecialchars($item['product_name']); ?></strong></p>
+                                                    <p>Quantity: <?php echo htmlspecialchars($item['quantity']); ?></p>
+                                                </div>
+                                            </div>
+                                        <?php endforeach; ?>
+                                    </div>
+                                </div>
+                            <?php endforeach; ?>
+                        <?php endif; ?>
+                    </div>
                 </div>
 
             <?php elseif ($active_section === 'my-product'): ?>
@@ -277,16 +633,15 @@ if ($active_section === 'my-product') {
                                 <div class="product-card">
                                     <div class="photo-display">
                                         <?php
-                                        // Stock badge
                                         if ($product['in_stock'] < 5 && $product['in_stock'] > 0) {
                                             echo '<span class="stock-badge">Low Stock</span>';
                                         } elseif ($product['in_stock'] == 0) {
                                             echo '<span class="stock-badge">Out of Stock</span>';
                                         }
                                         ?>
-                                        <button class="carousel-prev" data-product-id="<?php echo $product['product_id']; ?>">&lt;</button>
+                                        <button class="carousel-prev" data-product-id="<?php echo $product['product_id']; ?>"><</button>
                                         <img src="<?php echo htmlspecialchars($product['images'][0]); ?>" alt="Product Image" class="carousel-image" data-product-id="<?php echo $product['product_id']; ?>">
-                                        <button class="carousel-next" data-product-id="<?php echo $product['product_id']; ?>">&gt;</button>
+                                        <button class="carousel-next" data-product-id="<?php echo $product['product_id']; ?>">></button>
                                         <script>
                                             const images<?php echo $product['product_id']; ?> = <?php echo json_encode($product['images']); ?>;
                                             let currentIndex<?php echo $product['product_id']; ?> = 0;
@@ -367,6 +722,7 @@ if ($active_section === 'my-product') {
             <ul>
                 <li><a href="?section=my-account" class="<?php echo $active_section === 'my-account' ? 'active' : ''; ?>">My Account</a></li>
                 <li><a href="?section=change-password" class="<?php echo $active_section === 'change-password' ? 'active' : ''; ?>">Change Password</a></li>
+                <li><a href="?section=my-purchase" class="<?php echo $active_section === 'my-purchase' ? 'active' : ''; ?>">My Purchase</a></li>
                 <li><a href="?section=my-product" class="<?php echo $active_section === 'my-product' ? 'active' : ''; ?>">My Product</a></li>
                 <li><a href="?section=logout" class="<?php echo $active_section === 'logout' ? 'active' : ''; ?>" onclick="document.querySelector('form[action=\"\"]').submit(); return false;">Log Out</a></li>
                 <li><a href="?section=delete-account" class="<?php echo $active_section === 'delete-account' ? 'active' : ''; ?>">Delete Account</a></li>
@@ -393,6 +749,16 @@ if ($active_section === 'my-product') {
                     targetInput.type = 'password';
                     img.src = 'images/eye-close.png';
                 }
+            });
+        });
+
+        // Tab switching for My Purchase
+        document.querySelectorAll('.tab-btn').forEach(button => {
+            button.addEventListener('click', function() {
+                document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+                document.querySelectorAll('.tab-content').forEach(content => content.style.display = 'none');
+                this.classList.add('active');
+                document.getElementById(this.getAttribute('data-tab')).style.display = 'block';
             });
         });
     </script>
