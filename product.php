@@ -218,6 +218,7 @@ $image_paths = $product['image_paths'] ? explode(',', $product['image_paths']) :
 
         // Notification
         if (<?php echo isset($_GET['added']) && $_GET['added'] == '1' ? 'true' : 'false'; ?>) {
+            alert('Product added to cart!');
             const notification = document.getElementById('cart-notification');
             notification.style.display = 'block';
             setTimeout(() => {

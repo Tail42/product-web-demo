@@ -51,7 +51,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         $stmt = mysqli_prepare($conn, $query);
                         mysqli_stmt_bind_param($stmt, "si", $hashed_password, $user_id);
                         if (mysqli_stmt_execute($stmt)) {
-                            $success_message = 'Password changed successfully!';
+                            session_destroy();
+                            echo "<script>alert('Password changed successfully! Please log in again.'); window.location.href='login.php';</script>";
+                            exit;
                         } else {
                             $error_message = 'Password change failed: ' . mysqli_error($conn);
                         }
@@ -230,21 +232,80 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 break;
 
             case 'delete_account':
-                $confirm_account = trim($_POST['confirm_account'] ?? '');
-                if ($confirm_account !== $user['account']) {
-                    $error_message = 'Account name does not match.';
+                $confirm_delete = trim($_POST['confirm_delete'] ?? '');
+                $expected_input = $user['user_name'] . '@delete';
+                if ($confirm_delete !== $expected_input) {
+                    $error_message = 'Incorrect input. Please enter your username followed by @delete (e.g., ' . htmlspecialchars($user['user_name']) . '@delete).';
                 } else {
-                    $query = "DELETE FROM users WHERE user_id = ?";
+                    // Check for incomplete orders
+                    $query = "SELECT COUNT(*) as count FROM orders WHERE (buyer_id = ? OR seller_id = ?) AND status IN ('pending', 'shipped')";
                     $stmt = mysqli_prepare($conn, $query);
-                    mysqli_stmt_bind_param($stmt, "i", $user_id);
-                    if (mysqli_stmt_execute($stmt)) {
-                        session_destroy();
-                        header("Location: index.php");
-                        exit;
-                    } else {
-                        $error_message = 'Account deletion failed: ' . mysqli_error($conn);
-                    }
+                    mysqli_stmt_bind_param($stmt, "ii", $user_id, $user_id);
+                    mysqli_stmt_execute($stmt);
+                    $result = mysqli_stmt_get_result($stmt);
+                    $row = mysqli_fetch_assoc($result);
                     mysqli_stmt_close($stmt);
+                    if ($row['count'] > 0) {
+                        $error_message = 'Cannot delete account: You have incomplete orders (pending or shipped).';
+                    } else {
+                        mysqli_begin_transaction($conn);
+                        try {
+                            // Delete product images and products
+                            $query = "SELECT product_id FROM products WHERE seller_id = ?";
+                            $stmt = mysqli_prepare($conn, $query);
+                            mysqli_stmt_bind_param($stmt, "i", $user_id);
+                            mysqli_stmt_execute($stmt);
+                            $result = mysqli_stmt_get_result($stmt);
+                            while ($row = mysqli_fetch_assoc($result)) {
+                                $product_id = $row['product_id'];
+                                // Delete images
+                                $query = "SELECT image_path FROM product_images WHERE product_id = ?";
+                                $stmt_img = mysqli_prepare($conn, $query);
+                                mysqli_stmt_bind_param($stmt_img, "i", $product_id);
+                                mysqli_stmt_execute($stmt_img);
+                                $result_img = mysqli_stmt_get_result($stmt_img);
+                                while ($image = mysqli_fetch_assoc($result_img)) {
+                                    if ($image['image_path'] !== 'images/product/default_product_img.png') {
+                                        @unlink(__DIR__ . '/' . $image['image_path']);
+                                    }
+                                }
+                                mysqli_stmt_close($stmt_img);
+                                // Delete product_images
+                                $query = "DELETE FROM product_images WHERE product_id = ?";
+                                $stmt_img = mysqli_prepare($conn, $query);
+                                mysqli_stmt_bind_param($stmt_img, "i", $product_id);
+                                mysqli_stmt_execute($stmt_img);
+                                mysqli_stmt_close($stmt_img);
+                            }
+                            mysqli_stmt_close($stmt);
+                            // Delete products
+                            $query = "DELETE FROM products WHERE seller_id = ?";
+                            $stmt = mysqli_prepare($conn, $query);
+                            mysqli_stmt_bind_param($stmt, "i", $user_id);
+                            mysqli_stmt_execute($stmt);
+                            mysqli_stmt_close($stmt);
+                            // Delete orders
+                            $query = "DELETE FROM orders WHERE buyer_id = ? OR seller_id = ?";
+                            $stmt = mysqli_prepare($conn, $query);
+                            mysqli_stmt_bind_param($stmt, "ii", $user_id, $user_id);
+                            mysqli_stmt_execute($stmt);
+                            mysqli_stmt_close($stmt);
+                            // Delete user
+                            $query = "DELETE FROM users WHERE user_id = ?";
+                            $stmt = mysqli_prepare($conn, $query);
+                            mysqli_stmt_bind_param($stmt, "i", $user_id);
+                            mysqli_stmt_execute($stmt);
+                            mysqli_stmt_close($stmt);
+                            // Commit transaction
+                            mysqli_commit($conn);
+                            session_destroy();
+                            echo "<script>alert('Account deleted successfully!'); window.location.href='index.php';</script>";
+                            exit;
+                        } catch (Exception $e) {
+                            mysqli_rollback($conn);
+                            $error_message = 'Account deletion failed: ' . $e->getMessage();
+                        }
+                    }
                 }
                 break;
         }
@@ -678,8 +739,8 @@ if ($active_section === 'my-product') {
                     <form method="POST" action="">
                         <input type="hidden" name="action" value="delete_account">
                         <div class="form-group">
-                            <label for="confirm_account">Confirm Account Email</label>
-                            <input type="text" id="confirm_account" name="confirm_account" placeholder="Enter your account email" required>
+                            <label for="confirm_delete">Confirm Account Deletion</label>
+                            <input type="text" id="confirm_delete" name="confirm_delete" placeholder="Enter <?php echo htmlspecialchars($user['user_name']); ?>@delete to delete." required>
                         </div>
                         <button type="submit" class="create-btn" onclick="return confirm('Are you sure you want to delete your account? This action cannot be undone.');">Delete Account</button>
                     </form>

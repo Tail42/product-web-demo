@@ -149,34 +149,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
                         }
                     }
                     if (empty($error_message)) {
-                        $success_message = 'Product updated successfully!';
-                        // Refresh product data
-                        $query = "SELECT product_id, product_name, category, description, in_stock, sold, price FROM products WHERE product_id = ? AND seller_id = ?";
-                        $refresh_stmt = mysqli_prepare($conn, $query);
-                        if ($refresh_stmt) {
-                            mysqli_stmt_bind_param($refresh_stmt, "ii", $product_id, $user_id);
-                            mysqli_stmt_execute($refresh_stmt);
-                            $result = mysqli_stmt_get_result($refresh_stmt);
-                            $product = mysqli_fetch_assoc($result);
-                            mysqli_stmt_close($refresh_stmt);
-                        } else {
-                            $error_message = 'Failed to refresh product data: ' . mysqli_error($conn);
-                        }
-                        // Refresh images
-                        $images = [];
-                        $query = "SELECT image_id, image_path FROM product_images WHERE product_id = ?";
-                        $image_refresh_stmt = mysqli_prepare($conn, $query);
-                        if ($image_refresh_stmt) {
-                            mysqli_stmt_bind_param($image_refresh_stmt, "i", $product_id);
-                            mysqli_stmt_execute($image_refresh_stmt);
-                            $result = mysqli_stmt_get_result($image_refresh_stmt);
-                            while ($row = mysqli_fetch_assoc($result)) {
-                                $images[] = $row;
-                            }
-                            mysqli_stmt_close($image_refresh_stmt);
-                        } else {
-                            $error_message = 'Failed to refresh images: ' . mysqli_error($conn);
-                        }
+                        echo "<script>alert('Product updated successfully!'); window.location.href='user.php?section=my-product';</script>";
+                        exit;
                     }
                 } else {
                     $error_message = 'Product update failed: ' . mysqli_error($conn);
