@@ -128,6 +128,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Add Product - E-Shop</title>
     <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="css/add_product.css">
 </head>
 <body>
     <header>
@@ -185,7 +186,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
                     </div>
                     <div class="form-group">
                         <label for="product_images">Product Images (Select multiple)</label>
-                        <input type="file" id="product_images" name="product_images[]" accept="image/jpeg,image/png,image/gif" multiple>
+                        <div class="images-input-wrapper">
+                            <input type="file" id="product_images" name="product_images[]" accept="image/jpeg,image/png,image/gif" multiple>
+                            <p id="images-error" class="error-message" style="display: none;"></p>
+                        </div>
+                        <div class="images-preview"></div>
                     </div>
                     <div class="form-group">
                         <label for="in_stock">In Stock</label>
@@ -204,6 +209,47 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
     <footer>
         <p>© 2025 E-Shop System</p>
     </footer>
+    <script>
+        // Product images preview functionality
+        document.getElementById('product_images').addEventListener('change', function(event) {
+            const files = event.target.files;
+            const previewContainer = document.querySelector('.images-preview');
+            const error = document.getElementById('images-error');
+            const allowedTypes = ['image/jpeg', 'image/png', 'image/gif'];
+
+            // Clear existing previews and error
+            previewContainer.innerHTML = '';
+            error.style.display = 'none';
+            error.textContent = '';
+
+            if (files.length > 0) {
+                let validFiles = true;
+                Array.from(files).forEach(file => {
+                    if (!allowedTypes.includes(file.type)) {
+                        error.textContent = `Invalid file type for ${file.name}. Only JPG, PNG, and GIF are allowed.`;
+                        error.style.display = 'block';
+                        validFiles = false;
+                    }
+                });
+
+                if (validFiles) {
+                    Array.from(files).forEach(file => {
+                        const reader = new FileReader();
+                        reader.onload = function(e) {
+                            const img = document.createElement('img');
+                            img.src = e.target.result;
+                            img.alt = 'Product Image Preview';
+                            img.classList.add('preview-image');
+                            previewContainer.appendChild(img);
+                        };
+                        reader.readAsDataURL(file);
+                    });
+                } else {
+                    event.target.value = ''; // Clear the input if any file is invalid
+                }
+            }
+        });
+    </script>
     <?php mysqli_close($conn); ?>
 </body>
 </html>

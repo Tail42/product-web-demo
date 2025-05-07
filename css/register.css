@@ -45,6 +45,67 @@
     padding: 8px;
 }
 
+.photo-upload-group {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    background-color: #CAC6BD;
+    padding: 10px;
+    border-radius: 6px;
+    border: 1px solid #BB9A88;
+}
+
+.photo-input-wrapper {
+    flex: 1;
+    max-width: 230px;
+}
+
+.photo-preview {
+    flex-shrink: 0;
+    width: 70px;
+    height: 70px;
+    border-radius: 50%;
+    background-color: #E8E4DB;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
+    position: relative;
+    overflow: hidden;
+}
+
+.photo-preview img {
+    width: 70px;
+    height: 70px;
+    object-fit: cover;
+    object-position: center;
+    border-radius: 50%;
+    border: 1px solid #979D6E;
+    transition: transform 0.4s ease, border-color 0.4s ease, box-shadow 0.4s ease;
+}
+
+.photo-preview img:hover {
+    transform: scale(1.05);
+    border-color: #7e8364;
+    box-shadow: 0 0 8px rgba(151, 157, 110, 0.5);
+}
+
+.photo-preview img[src="images/default_user.png"]::before {
+    content: "Upload Photo";
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    color: #3A3A3A;
+    font-size: 0.8em;
+    font-weight: 500;
+    text-align: center;
+    opacity: 0.7;
+    pointer-events: none;
+}
+
+#photo-error {
+    margin-top: 8px;
+    animation: fadeIn 0.3s ease-in;
+}
+
 .password-group {
     position: relative;
 }
@@ -81,9 +142,47 @@
     background-color: #7e8364;
 }
 
+@keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
 @media (max-width: 480px) {
     .register-form {
         margin: 20px;
         padding: 20px;
+    }
+
+    .photo-upload-group {
+        flex-direction: column;
+        align-items: center;
+        gap: 10px;
+        padding: 8px;
+    }
+
+    .photo-input-wrapper {
+        max-width: 100%;
+    }
+
+    .photo-preview {
+        width: 60px;
+        height: 60px;
+    }
+
+    .photo-preview img {
+        width: 60px;
+        height: 60px;
+    }
+}
+
+@media (max-width: 360px) {
+    .photo-preview {
+        width: 50px;
+        height: 50px;
+    }
+
+    .photo-preview img {
+        width: 50px;
+        height: 50px;
     }
 }
