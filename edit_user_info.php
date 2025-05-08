@@ -9,7 +9,7 @@ if (!isset($_SESSION['user_id'])) {
 
 $user_id = $_SESSION['user_id'];
 
-// 查詢用戶資訊
+// Query user info
 $query = "SELECT user_name, account, fullname, address, phone, user_picture FROM users WHERE user_id = ? LIMIT 1";
 $stmt = mysqli_prepare($conn, $query);
 mysqli_stmt_bind_param($stmt, "i", $user_id);
@@ -18,7 +18,7 @@ $result = mysqli_stmt_get_result($stmt);
 $user = mysqli_fetch_assoc($result);
 mysqli_stmt_close($stmt);
 
-// 處理表單提交
+// Handle form submission
 $success_message = '';
 $error_message = '';
 
@@ -32,7 +32,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
     if (empty($new_name) || empty($new_fullname) || empty($new_address) || empty($new_phone)) {
         $error_message = 'All fields are required.';
     } else {
-        // 處理頭像上傳
+        // Handle profile picture upload
         if (isset($_FILES['user_picture']) && $_FILES['user_picture']['error'] === UPLOAD_ERR_OK) {
             $upload_dir = __DIR__ . '/images/';
             if (!is_dir($upload_dir)) {
@@ -56,7 +56,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
             mysqli_stmt_bind_param($stmt, "sssssi", $new_name, $new_fullname, $new_address, $new_phone, $user_picture, $user_id);
             if (mysqli_stmt_execute($stmt)) {
                 $success_message = 'Account updated successfully!';
-                // 更新 session 中的用戶資訊
+                // Update session user info
                 $user['user_name'] = $new_name;
                 $user['fullname'] = $new_fullname;
                 $user['address'] = $new_address;
@@ -101,6 +101,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
             <h2>Edit Profile</h2>
             <?php if ($success_message): ?>
                 <p class="success"><?php echo htmlspecialchars($success_message); ?></p>
+                <script>
+                    alert('<?php echo addslashes($success_message); ?>');
+                </script>
             <?php endif; ?>
             <?php if ($error_message): ?>
                 <p class="error"><?php echo htmlspecialchars($error_message); ?></p>
@@ -141,7 +144,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
         <p>© 2025 E-Shop System</p>
     </footer>
     <script>
-        // 圖片預覽功能
+        // Image preview functionality
         document.getElementById('user_picture').addEventListener('change', function(e) {
             const file = e.target.files[0];
             if (file) {
