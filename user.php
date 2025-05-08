@@ -697,9 +697,17 @@ if ($active_section === 'my-product') {
                             <p>No products available.</p>
                         <?php else: ?>
                             <?php foreach ($products as $product): ?>
-                                <div class="product-card">
+                                <div class="product-card" data-product-id="<?php echo htmlspecialchars($product['product_id']); ?>">
                                     <div class="photo-display">
-                                        <img src="<?php echo htmlspecialchars($product['images'][0]); ?>" alt="<?php echo htmlspecialchars($product['product_name']); ?>">
+                                        <img src="<?php echo htmlspecialchars($product['images'][0]); ?>" 
+                                             alt="<?php echo htmlspecialchars($product['product_name']); ?>" 
+                                             id="product-image-<?php echo htmlspecialchars($product['product_id']); ?>" 
+                                             data-images='<?php echo htmlspecialchars(json_encode($product['images'])); ?>'
+                                             data-current-index="0">
+                                        <?php if (count($product['images']) > 1): ?>
+                                            <button class="carousel-prev" data-product-id="<?php echo htmlspecialchars($product['product_id']); ?>">&lt;</button>
+                                            <button class="carousel-next" data-product-id="<?php echo htmlspecialchars($product['product_id']); ?>">&gt;</button>
+                                        <?php endif; ?>
                                         <?php if ($product['in_stock'] <= 0): ?>
                                             <span class="stock-badge">Out of Stock</span>
                                         <?php endif; ?>
@@ -788,6 +796,42 @@ if ($active_section === 'my-product') {
                     btn.classList.toggle('active', btn.getAttribute('data-tab') === tab);
                 });
             });
+        });
+
+        // Product image carousel functionality
+        document.querySelectorAll('.product-card').forEach(card => {
+            const productId = card.getAttribute('data-product-id');
+            const imgElement = card.querySelector(`#product-image-${productId}`);
+            const images = JSON.parse(imgElement.getAttribute('data-images'));
+            let currentIndex = parseInt(imgElement.getAttribute('data-current-index')) || 0;
+
+            const prevButton = card.querySelector(`.carousel-prev[data-product-id="${productId}"]`);
+            const nextButton = card.querySelector(`.carousel-next[data-product-id="${productId}"]`);
+
+            if (images.length <= 1) {
+                if (prevButton) prevButton.style.display = 'none';
+                if (nextButton) nextButton.style.display = 'none';
+                return;
+            }
+
+            const updateImage = () => {
+                imgElement.src = images[currentIndex];
+                imgElement.setAttribute('data-current-index', currentIndex);
+            };
+
+            if (prevButton) {
+                prevButton.addEventListener('click', () => {
+                    currentIndex = (currentIndex - 1 + images.length) % images.length;
+                    updateImage();
+                });
+            }
+
+            if (nextButton) {
+                nextButton.addEventListener('click', () => {
+                    currentIndex = (currentIndex + 1) % images.length;
+                    updateImage();
+                });
+            }
         });
     </script>
 </body>
