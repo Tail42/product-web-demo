@@ -43,75 +43,44 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
     } else {
         // Handle multiple image uploads
         $image_paths = [];
-        $upload_dir = "images/product/$user_id/";
-        $absolute_upload_dir = __DIR__ . '/' . $upload_dir;
-
-        // Ensure upload directory exists and is writable
-        if (!is_dir($absolute_upload_dir)) {
-            if (!mkdir($absolute_upload_dir, 0777, true) || !is_writable($absolute_upload_dir)) {
-                $error_message = 'Failed to create or write to upload directory.';
-            }
+        $upload_dir = __DIR__ . "/images/product/$user_id/";
+        if (!is_dir($upload_dir)) {
+            mkdir($upload_dir, 0777, true);
         }
 
-        if (empty($error_message) && isset($_FILES['product_images']) && !empty($_FILES['product_images']['name'][0])) {
+        if (isset($_FILES['product_images']) && !empty($_FILES['product_images']['name'][0])) {
             $allowed_types = ['image/jpeg', 'image/png', 'image/gif'];
             foreach ($_FILES['product_images']['name'] as $key => $name) {
-                if (empty($name) || $_FILES['product_images']['error'][$key] !== UPLOAD_ERR_OK) {
-                    // Handle specific upload errors
-                    switch ($_FILES['product_images']['error'][$key]) {
-                        case UPLOAD_ERR_INI_SIZE:
-                        case UPLOAD_ERR_FORM_SIZE:
-                            $error_message = "File '$name' exceeds maximum upload size.";
-                            break;
-                        case UPLOAD_ERR_PARTIAL:
-                            $error_message = "File '$name' was only partially uploaded.";
-                            break;
-                        case UPLOAD_ERR_NO_FILE:
-                            continue 2; // Skip to next file in foreach loop
-                        case UPLOAD_ERR_NO_TMP_DIR:
-                        case UPLOAD_ERR_CANT_WRITE:
-                        case UPLOAD_ERR_EXTENSION:
-                            $error_message = "Server error uploading file '$name'.";
-                            break;
-                        default:
-                            $error_message = "Unknown error uploading file '$name'.";
-                            break;
-                    }
-                    if ($error_message) break;
-                    continue;
-                }
+                if ($_FILES['product_images']['error'][$key] === UPLOAD_ERR_OK) {
+                    $file_tmp = $_FILES['product_images']['tmp_name'][$key];
+                    $file_name = basename($name);
+                    $file_type = mime_content_type($file_tmp);
+                    $file_size = $_FILES['product_images']['size'][$key];
 
-                $file_tmp = $_FILES['product_images']['tmp_name'][$key];
-                $file_name = basename($name);
-                $file_type = mime_content_type($file_tmp);
-                $file_size = $_FILES['product_images']['size'][$key];
-
-                if (!in_array($file_type, $allowed_types)) {
-                    $error_message = "Invalid file type for '$file_name'. Only JPG, PNG, and GIF are allowed.";
-                    break;
-                } elseif ($file_size > 5 * 1024 * 1024) {
-                    $error_message = "File size for '$file_name' exceeds 5MB limit.";
-                    break;
-                } else {
-                    $new_file_name = 'product_' . uniqid() . '.' . pathinfo($file_name, PATHINFO_EXTENSION);
-                    $destination = $absolute_upload_dir . $new_file_name;
-
-                    if (move_uploaded_file($file_tmp, $destination)) {
-                        $image_paths[] = $upload_dir . $new_file_name; // Store relative path
-                    } else {
-                        $error_message = "Failed to move uploaded file '$file_name' to destination.";
+                    if (!in_array($file_type, $allowed_types)) {
+                        $error_message = 'Invalid file type for ' . $file_name . '. Only JPG, PNG, and GIF are allowed.';
                         break;
+                    } elseif ($file_size > 5 * 1024 * 1024) {
+                        $error_message = 'File size for ' . $file_name . ' exceeds 5MB limit.';
+                        break;
+                    } else {
+                        $new_file_name = 'product_' . uniqid() . '.' . pathinfo($file_name, PATHINFO_EXTENSION);
+                        $destination = $upload_dir . $new_file_name;
+
+                        if (move_uploaded_file($file_tmp, $destination)) {
+                            $image_paths[] = "images/product/$user_id/" . $new_file_name;
+                        } else {
+                            $error_message = 'Failed to upload file ' . $file_name . '.';
+                            break;
+                        }
                     }
                 }
             }
-        }
-
-        // If no valid images were uploaded, use default
-        if (empty($image_paths) && empty($error_message)) {
+        } else {
             $image_paths[] = "images/product/default_product_img.png";
         }
 
-        // Insert product if no errors
+        // Insert product
         if (empty($error_message)) {
             $query = "INSERT INTO products (product_name, category, seller_id, description, in_stock, sold, price, create_at, update_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)";
             $stmt = mysqli_prepare($conn, $query);
@@ -183,10 +152,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
             <h2>Add Product</h2>
             <?php if ($success_message): ?>
                 <p class="success"><?php echo htmlspecialchars($success_message); ?></p>
-                <script>
-                    alert('Product added successfully!');
-                    window.location.href = 'user.php?section=my-product';
-                </script>
             <?php endif; ?>
             <?php if ($error_message): ?>
                 <p class="error"><?php echo htmlspecialchars($error_message); ?></p>
