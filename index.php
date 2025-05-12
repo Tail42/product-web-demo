@@ -31,7 +31,7 @@ $valid_categories = [
     'Food & Beverages',
     'Home & Furniture',
     'Sports & Outdoor Equipment',
-    'Automotive',
+    ' Automotive & Motorcycle Accessory',
     'Baby & Maternity',
     'Books & Office',
     'Other'
@@ -168,7 +168,7 @@ if ($stmt) {
                 <button class="category-btn <?php echo $category === 'Food & Beverages' ? 'active' : ''; ?>" data-category="Food & Beverages">Food & Beverages</button>
                 <button class="category-btn <?php echo $category === 'Home & Furniture' ? 'active' : ''; ?>" data-category="Home & Furniture">Home & Furniture</button>
                 <button class="category-btn <?php echo $category === 'Sports & Outdoor Equipment' ? 'active' : ''; ?>" data-category="Sports & Outdoor Equipment">Sports & Outdoor Equipment</button>
-                <button class="category-btn <?php echo $category === 'Automotive' ? 'active' : ''; ?>" data-category="Automotive">Automotive</button>
+                <button class="category-btn <?php echo $category === ' Automotive & Motorcycle Accessory' ? 'active' : ''; ?>" data-category=" Automotive & Motorcycle Accessory"> Automotive & Motorcycle Accessory</button>
                 <button class="category-btn <?php echo $category === 'Baby & Maternity' ? 'active' : ''; ?>" data-category="Baby & Maternity">Baby & Maternity</button>
                 <button class="category-btn <?php echo $category === 'Books & Office' ? 'active' : ''; ?>" data-category="Books & Office">Books & Office</button>
                 <button class="category-btn <?php echo $category === 'Other' ? 'active' : ''; ?>" data-category="Other">Other</button>
